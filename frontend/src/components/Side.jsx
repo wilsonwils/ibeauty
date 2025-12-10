@@ -24,7 +24,7 @@ const Side = () => {
 
   return (
     <aside
-      className={`h-screen bg-[#27afbf] shadow-md flex flex-col items-start py-6 fixed left-0 top-0 transition-all duration-300 ${
+      className={`h-screen bg-[#25AFC1] shadow-md flex flex-col items-start py-6 fixed left-0 top-0 transition-all duration-300 ${
         expanded ? "w-45" : "w-20"
       }`}
     >
@@ -50,7 +50,7 @@ const Side = () => {
           <button
             key={index}
             onClick={item.action} 
-            className="flex items-center gap-4 px-4 py-2 text-gray-600 hover:text-[#0ab0ff] transition w-full"
+            className="flex items-center gap-4 px-4 py-2 hover:bg-[#1b2341]/70 text-white transition w-full"
           >
             <img src={item.icon} alt="" />
             {expanded && <span className="text-base">{item.label}</span>}

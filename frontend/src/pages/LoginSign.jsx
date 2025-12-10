@@ -60,8 +60,9 @@ const UserIcon = <FiUser size={24} />;
 /* ----------------------------------
    Social Button
 ---------------------------------- */
-const SocialButton = ({ icon, children, onClick }) => (
+const SocialButton = ({ type = "button", icon, children, onClick }) => (
   <button
+    type={type}
     onClick={onClick}
     className="flex flex-1 items-center justify-center gap-3 rounded-full border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
   >
@@ -69,6 +70,7 @@ const SocialButton = ({ icon, children, onClick }) => (
     {children}
   </button>
 );
+
 
 /* ----------------------------------
    Login Form
@@ -111,7 +113,9 @@ const LoginForm = ({
       />
     </div>
 
-    {errorMessage && <p className="text-red-500 text-sm text-center">{errorMessage}</p>}
+    {errorMessage && (
+      <p className="text-red-500 text-sm text-center">{errorMessage}</p>
+    )}
 
     <button
       type="submit"
@@ -127,10 +131,29 @@ const LoginForm = ({
     </div>
 
     <div className="flex flex-col gap-3 sm:flex-row">
-      <SocialButton icon={<FcGoogle size={22} />} onClick={() => handleSocialLogin(googleProvider)}>
+      {/* GOOGLE BUTTON FIXED */}
+      <SocialButton
+        type="button"
+        icon={<FcGoogle size={22} />}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          handleSocialLogin(googleProvider);
+        }}
+      >
         Continue with Google
       </SocialButton>
-      <SocialButton icon={<FaApple size={22} />} onClick={() => handleSocialLogin(appleProvider)}>
+
+      {/* APPLE BUTTON FIXED */}
+      <SocialButton
+        type="button"
+        icon={<FaApple size={22} />}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          handleSocialLogin(appleProvider);
+        }}
+      >
         Continue with Apple ID
       </SocialButton>
     </div>
@@ -145,6 +168,8 @@ const LoginForm = ({
   </form>
 );
 
+
+
 /* ----------------------------------
    Signup Form
 ---------------------------------- */
@@ -157,14 +182,34 @@ const SignupForm = ({
   setShowPopup,
   errorMessage,
   errors,
+  setSignupData,
+  setSignupErrors,
+  setErrorMessage
 }) => (
   <>
     {showPopup && (
       <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-xl z-50">
         <div className="bg-white p-6 rounded-xl shadow-xl w-[90%] max-w-md text-center relative">
-          <button onClick={() => setShowPopup(false)} className="absolute top-3 right-3 text-gray-500">
-            ✕
-          </button>
+<button
+  onClick={() => {
+    setShowPopup(false);
+    setSignupData({
+      firstName: "",
+      lastName: "",
+      email: "",
+      organization: "",
+      phone: "",
+      password: "",
+      confirmPassword: "",
+    });
+    setSignupErrors({});
+    setErrorMessage("");
+  }}
+  className="absolute top-3 right-3 text-gray-500"
+>
+  ✕
+</button>
+
           <h2 className="text-xl font-semibold text-[#08A882] mb-2">Account created successfully</h2>
           <p className="text-slate-600 text-sm">
             Verify your email address by clicking the link sent to your inbox.
@@ -478,6 +523,9 @@ function LoginSign() {
               setShowPopup={setShowPopup}
               errorMessage={errorMessage}
               errors={signupErrors}
+              setSignupData={setSignupData}  
+              setSignupErrors={setSignupErrors} 
+              setErrorMessage={setErrorMessage}
             />
           )}
         </div>

@@ -11,7 +11,7 @@ const ProductList = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // NEW → For checkbox system
+  // Checkbox
   const [selectedIds, setSelectedIds] = useState([]);
   const [selectAll, setSelectAll] = useState(false);
 
@@ -27,23 +27,41 @@ const ProductList = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedProductId, setSelectedProductId] = useState(null);
 
+  // Bulk delete flag
+  const [isBulkDelete, setIsBulkDelete] = useState(false);
+
+  // Soft warning
+  const [warning, setWarning] = useState("");
+
   // Fetch products
-  const fetchProducts = async () => {
-    try {
-      const userId = localStorage.getItem("userId");
-      const res = await api(`/get_products?user_id=${userId}`);
-      const data = await res.json();
-      if (res.ok) {
-        setProducts(data.products || []);
-      } else {
-        console.error(data.error);
-      }
-    } catch (err) {
-      console.error("Failed to fetch products:", err);
-    } finally {
-      setLoading(false);
+const fetchProducts = async () => {
+  try {
+    const userId = localStorage.getItem("userId");
+    console.log("userId", userId);
+
+    if (!userId) throw new Error("User ID not found");
+
+    // Call the API
+    const res = await api(`/get_products?user_id=${userId}`);
+
+    // Parse the response JSON
+    const data = await res.json();
+
+    if (res.ok) {
+      setProducts(data.products || []);
+    } else {
+      console.error("API error:", data.error || data.message);
+      setProducts([]);
     }
-  };
+  } catch (err) {
+    console.error("Failed to fetch products:", err);
+    setProducts([]);
+  } finally {
+    setLoading(false);
+  }
+};
+
+
 
   useEffect(() => {
     fetchProducts();
@@ -59,12 +77,35 @@ const ProductList = () => {
 
   // OPEN DELETE SINGLE
   const openDeletePopup = (productId) => {
+    setIsBulkDelete(false);
     setSelectedProductId(productId);
     setShowDeleteModal(true);
   };
 
-  // CONFIRM DELETE SINGLE
+  // CONFIRM DELETE (single + bulk)
   const confirmDelete = async () => {
+    // BULK DELETE
+    if (isBulkDelete) {
+      try {
+        for (const id of selectedIds) {
+          await api(`/delete_product/${id}`, { method: "DELETE" });
+        }
+
+        setProducts(products.filter((p) => !selectedIds.includes(p.id)));
+        setSelectedIds([]);
+        setSelectAll(false);
+      } catch (err) {
+        console.error(err);
+        setWarning("Bulk delete failed!");
+        setTimeout(() => setWarning(""), 3000);
+      }
+
+      setIsBulkDelete(false);
+      setShowDeleteModal(false);
+      return;
+    }
+
+    // SINGLE DELETE
     if (!selectedProductId) return;
 
     try {
@@ -75,15 +116,18 @@ const ProductList = () => {
 
       if (res.ok) {
         setProducts(products.filter((p) => p.id !== selectedProductId));
-        setShowDeleteModal(false);
-        setSelectedProductId(null);
       } else {
-        alert(data.error || "Failed to delete product");
+        setWarning(data.error || "Delete failed!");
+        setTimeout(() => setWarning(""), 3000);
       }
     } catch (err) {
       console.error(err);
-      alert("Something went wrong");
+      setWarning("Something went wrong!");
+      setTimeout(() => setWarning(""), 3000);
     }
+
+    setSelectedProductId(null);
+    setShowDeleteModal(false);
   };
 
   // FILTER PRODUCTS
@@ -147,18 +191,14 @@ const ProductList = () => {
     newWindow.close();
   };
 
-  // -------------------------
-  // NEW → HANDLE SELECT ALL
-  // -------------------------
+  // SELECT ALL
   const handleSelectAll = () => {
     const newState = !selectAll;
     setSelectAll(newState);
     setSelectedIds(newState ? currentProducts.map((p) => p.id) : []);
   };
 
-  // -------------------------
-  // NEW → HANDLE SINGLE CHECKBOX
-  // -------------------------
+  // SINGLE SELECT
   const toggleSelect = (id) => {
     let updated = [...selectedIds];
     if (updated.includes(id)) {
@@ -170,26 +210,16 @@ const ProductList = () => {
     setSelectAll(updated.length === currentProducts.length);
   };
 
-  // -------------------------
-  // NEW → DELETE ALL SELECTED
-  // -------------------------
-  const deleteSelected = async () => {
-    if (selectedIds.length === 0) return alert("No products selected!");
-
-    if (!window.confirm("Delete all selected products?")) return;
-
-    try {
-      for (const id of selectedIds) {
-        await api(`/delete_product/${id}`, { method: "DELETE" });
-      }
-
-      setProducts(products.filter((p) => !selectedIds.includes(p.id)));
-      setSelectedIds([]);
-      setSelectAll(false);
-    } catch (err) {
-      console.error(err);
-      alert("Bulk delete failed");
+ 
+  const deleteSelected = () => {
+    if (selectedIds.length === 0) {
+      setWarning("Please select at least one product.");
+      setTimeout(() => setWarning(""), 2500);
+      return;
     }
+
+    setIsBulkDelete(true);
+    setShowDeleteModal(true);
   };
 
   if (loading) return <p className="text-center mt-10">Loading products...</p>;
@@ -197,13 +227,20 @@ const ProductList = () => {
   return (
     <div className="p-6 max-w-[1400px] w-full bg-white rounded-lg mx-auto">
 
+      {/* WARNING MESSAGE */}
+      {warning && (
+        <div className="mb-4 p-3 bg-yellow-100 text-yellow-800 border border-yellow-300 rounded">
+          {warning}
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl font-semibold">Product List</h2>
 
         <div className="flex items-center gap-3">
           
-          {/* NEW DELETE ALL BUTTON */}
+          {/* DELETE ALL BUTTON */}
           <button
             onClick={deleteSelected}
             className="bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-600"
@@ -367,7 +404,9 @@ const ProductList = () => {
         <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-xl z-50">
           <div className="bg-white p-6 rounded-lg shadow-lg w-80 text-center">
             <h3 className="text-lg font-semibold mb-4">
-              Are you sure you want to delete this?
+              {isBulkDelete
+                ? "Are you sure you want to delete all selected products?"
+                : "Are you sure you want to delete this?"}
             </h3>
 
             <div className="flex justify-center gap-4">
@@ -380,7 +419,10 @@ const ProductList = () => {
 
               <button
                 className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
-                onClick={() => setShowDeleteModal(false)}
+                onClick={() => {
+                  setIsBulkDelete(false);
+                  setShowDeleteModal(false);
+                }}
               >
                 No
               </button>

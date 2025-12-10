@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { API_BASE } from "../utils/api";
+import Questionaire from "./Questionaire";
 
 const Setflow = () => {
   const steps = [
@@ -19,6 +20,13 @@ const Setflow = () => {
   const [showSelect, setShowSelect] = useState(false);
   const [selectedPosition, setSelectedPosition] = useState("");
   const [isCompleted, setIsCompleted] = useState(false);
+  const [questionnaire, setQuestionnaire] = useState({
+  Gender: false,
+  Age: false,
+  "Skin Type": false,
+  Name: false,
+  "Phone Number": false,
+});
 
   // ----------------------------
   // Upload thumbnail to backend
@@ -78,59 +86,67 @@ const Setflow = () => {
   // Save current step dynamically
   // ----------------------------
   const saveStep = async () => {
-    const userId = localStorage.getItem("userId");
-    if (!userId) {
-      alert("User not logged in.");
+  const userId = localStorage.getItem("userId");
+  if (!userId) {
+    alert("User not logged in.");
+    return;
+  }
+
+  const stepName = steps[activeIndex];
+
+  try {
+    const response = await fetch(`${API_BASE}/create_flow`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: userId,
+        flow_name: stepName,
+        description: `${stepName} saved successfully`,
+        cta_position: selectedPosition || null,
+        thumbnail: uploadedThumbnailUrl || null,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      alert(`Failed to save step: ${data.error}`);
       return;
     }
 
-    const stepName = steps[activeIndex];
+    console.log("Step Saved:", data);
 
-    try {
-      const response = await fetch(`${API_BASE}/create_flow`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: userId,
-          flow_name: stepName,
-          description: `${stepName} saved successfully`,
-          cta_position: selectedPosition || null,
-          thumbnail: uploadedThumbnailUrl || null,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        alert(`Failed to save step: ${data.error}`);
-        return;
-      }
-
-      console.log("Step Saved:", data);
-
-      // -----------------------------------
-      // EXTRA CALL ONLY FOR LANDING PAGE
-      // -----------------------------------
-      if (stepName === "Landing Page") {
-        await saveLandingPage(data.flow_id, userId);
-      }
-
-    } catch (error) {
-      console.error("Error saving step:", error);
-      alert("Failed to save step.");
+    // ✅ Save the flow_id into localStorage so Questionnaire can access it
+    if (data.flow_id) {
+      localStorage.setItem("flow_id", data.flow_id);
     }
-  };
+
+    // EXTRA CALL ONLY FOR LANDING PAGE
+    if (stepName === "Landing Page") {
+      await saveLandingPage(data.flow_id, userId);
+    }
+
+  } catch (error) {
+    console.error("Error saving step:", error);
+    alert("Failed to save step.");
+  }
+};
 
   const goNext = async () => {
     await saveStep();
     if (activeIndex < steps.length - 1) setActiveIndex(activeIndex + 1);
   };
 
-  const goSkip = () => goNext();
+ const goSkip = () => {
+  // JUST MOVE TO NEXT STEP — NO SAVE
+  if (activeIndex < steps.length - 1) {
+    setActiveIndex(activeIndex + 1);
+  }
+};
+
 
   const handleFinalSave = async () => {
     await saveStep();
-    alert("Flow saved successfully!");
     setIsCompleted(true);
   };
 
@@ -139,50 +155,48 @@ const Setflow = () => {
   // ----------------------------
   const contents = [
     <div className="flex flex-col gap-4" key="landing">
-      <label className="font-semibold">Add Thumbnail:</label>
-      <input
-        type="file"
-        accept="image/*"
-        onChange={handleFileChange}
-        className="border border-gray-300 rounded p-2"
+  <label className="font-semibold">Add Thumbnail:</label>
+  <input
+    type="file"
+    accept="image/*"
+    onChange={handleFileChange}
+    className="border border-gray-300 rounded p-2"
+  />
+
+  {thumbnail && (
+    <div className="mt-4">
+      <p className="font-semibold">Preview:</p>
+      <img
+        src={thumbnail}
+        alt="Thumbnail Preview"
+        className="h-32 w-32 object-cover rounded"
       />
+    </div>
+  )}
 
-      {thumbnail && (
-        <div className="mt-4">
-          <p className="font-semibold">Preview:</p>
-          <img
-            src={thumbnail}
-            alt="Thumbnail Preview"
-            className="h-32 w-32 object-cover rounded"
-          />
-        </div>
-      )}
+  <div className="flex flex-col gap-2 mt-4">
+    <label className="font-semibold cursor-pointer">CTA Button Position:</label>
 
-      <div className="flex items-center gap-4 mt-4">
-        <button
-          onClick={() => setShowSelect(!showSelect)}
-          className="bg-[#00bcd4] text-white py-2 px-4 rounded hover:bg-[#009aae]"
-        >
-          CTA Button Position
-        </button>
+    <select
+      value={selectedPosition}
+      onChange={(e) => setSelectedPosition(e.target.value)}
+      className="bg-white py-2 px-4 rounded border-2 border-gray-200 cursor-pointer w-max hover:border-gray-300"
+    >
+      <option value="">Select</option>
+      <option value="left">Left</option>
+      <option value="right">Right</option>
+      <option value="top">Top</option>
+      <option value="bottom">Bottom</option>
+    </select>
+  </div>
+</div>,
 
-        {showSelect && (
-          <select
-            value={selectedPosition}
-            onChange={(e) => setSelectedPosition(e.target.value)}
-            className="border border-gray-300 rounded p-2"
-          >
-            <option value="">Select</option>
-            <option value="left">Left</option>
-            <option value="right">Right</option>
-            <option value="top">Top</option>
-            <option value="bottom">Bottom</option>
-          </select>
-        )}
-      </div>
-    </div>,
+       <Questionaire
+      key="questionaire"
+      questionnaire={questionnaire}
+      setQuestionnaire={setQuestionnaire}
+    />,
 
-    <div key="questionaire">Content for Questionaire</div>,
     <div key="capture">Content for Capture</div>,
     <div key="contact">Content for Contact</div>,
     <div key="segmentation">Content for Segmentation</div>,
@@ -213,48 +227,45 @@ const Setflow = () => {
         ))}
       </div>
 
-      <div className="relative p-6 border border-gray-300 rounded min-h-[150px] bg-gray-50">
-        {contents[activeIndex]}
+      <div className="p-6 border border-gray-300 rounded min-h-[150px] bg-gray-50 flex flex-col gap-4">
+  <div className="flex-1">
+    {contents[activeIndex]}
+  </div>
 
-        <div className="absolute bottom-4 right-4 flex gap-3">
-          {/* Previous Button */}
-          {activeIndex > 0 && (
-            <button
-              onClick={() => setActiveIndex(activeIndex - 1)}
-              className="px-4 py-2 bg-[#00bcd4] text-black rounded hover:bg-[#009aae]"
-            >
-              Previous
-            </button>
-          )}
-
-          {/* Skip Button */}
-          {activeIndex !== steps.length - 1 && (
-            <button
-              onClick={goSkip}
-              className="px-4 py-2 bg-gray-300 text-black rounded hover:bg-gray-400"
-            >
-              Skip
-            </button>
-          )}
-
-          {/* Save / Save & Next */}
-          {activeIndex === steps.length - 1 ? (
-            <button
-              onClick={handleFinalSave}
-              className="px-4 py-2 bg-[#00bcd4] text-white rounded hover:bg-[#009aae]"
-            >
-              Save
-            </button>
-          ) : (
-            <button
-              onClick={goNext}
-              className="px-4 py-2 bg-[#00bcd4] text-white rounded hover:bg-[#009aae]"
-            >
-              Save & Next
-            </button>
-          )}
-        </div>
-      </div>
+  <div className="flex justify-end gap-3">
+    {activeIndex > 0 && (
+      <button
+        onClick={() => setActiveIndex(activeIndex - 1)}
+        className="px-4 py-2 bg-[#00bcd4] text-white rounded hover:bg-[#009aae]"
+      >
+        Previous
+      </button>
+    )}
+    {activeIndex !== steps.length - 1 && (
+      <button
+        onClick={goSkip}
+        className="px-4 py-2 bg-gray-300 text-black rounded hover:bg-gray-400"
+      >
+        Skip
+      </button>
+    )}
+    {activeIndex === steps.length - 1 ? (
+      <button
+        onClick={handleFinalSave}
+        className="px-4 py-2 bg-[#00bcd4] text-white rounded hover:bg-[#009aae]"
+      >
+        Save
+      </button>
+    ) : (
+      <button
+        onClick={goNext}
+        className="px-4 py-2 bg-[#00bcd4] text-white rounded hover:bg-[#009aae]"
+      >
+        Save & Next
+      </button>
+    )}
+  </div>
+</div>
     </div>
   );
 };

@@ -5,21 +5,29 @@ import { useNavigate } from "react-router-dom";
 import { useUser } from "../context/UserContext"; // use global user
 
 const products = [
+
   {
-    title: "i – Tryon",
-    text: "Lorem ipsum...",
-    btn: "Get started",
-    bg: "#31c6cf",
-    shadow: "rgba(49, 198, 207, 0.35)",
-  },
-  {
-    title: "i – Beauty",
+    title: "Skin Analyzer",
     text: "Lorem ipsum...",
     btn: "Try now",
-    bg: "#ff4fa7",
-    shadow: "rgba(255, 79, 167, 0.4)",
+    bg: "#fe327b",
+    shadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
   },
-  // ...your other items
+    {
+    title: "Makeup",
+    text: "Lorem ipsum...",
+    btn: "Try now",
+    bg: "#450693",
+    shadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
+  },
+    {
+    title: "Hair",
+    text: "Lorem ipsum...",
+    btn: "Get started",
+    bg: "#8c00ff",
+    shadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
+  },
+ 
 ];
 
 const Dashboard = () => {
@@ -68,7 +76,7 @@ const Dashboard = () => {
               bg-[linear-gradient(to_right,#00B7C2,#2D4DBA,#6A1B9A,#E65100,#D81B60,#1E40FF)]
               font-medium text-3xl tracking-wide"
             >
-              iCOMMERCE
+              iBEAUTY
             </h1>
 
             <div className="flex items-center gap-6 relative">
