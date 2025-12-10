@@ -17,20 +17,10 @@ const Setflow = () => {
   const [activeIndex, setActiveIndex] = useState(0);
   const [thumbnail, setThumbnail] = useState(null);
   const [uploadedThumbnailUrl, setUploadedThumbnailUrl] = useState(null);
-  const [showSelect, setShowSelect] = useState(false);
   const [selectedPosition, setSelectedPosition] = useState("");
   const [isCompleted, setIsCompleted] = useState(false);
-  const [questionnaire, setQuestionnaire] = useState({
-  Gender: false,
-  Age: false,
-  "Skin Type": false,
-  Name: false,
-  "Phone Number": false,
-});
+  const [currentSaveFunction, setCurrentSaveFunction] = useState(null);
 
-  // ----------------------------
-  // Upload thumbnail to backend
-  // ----------------------------
   const uploadThumbnail = async (file) => {
     try {
       const formData = new FormData();
@@ -42,12 +32,9 @@ const Setflow = () => {
       });
 
       const data = await res.json();
-      if (data.imageUrl) return data.imageUrl;
-
-      console.error("Thumbnail upload failed:", data);
-      return null;
+      return data.imageUrl || null;
     } catch (err) {
-      console.error("Error uploading thumbnail:", err);
+      console.error("Thumbnail upload error:", err);
       return null;
     }
   };
@@ -57,14 +44,13 @@ const Setflow = () => {
     if (!file) return;
 
     setThumbnail(URL.createObjectURL(file));
-
     const url = await uploadThumbnail(file);
     setUploadedThumbnailUrl(url);
   };
 
   const saveLandingPage = async (flowId, userId) => {
     try {
-      const response = await fetch(`${API_BASE}/save_landing_page`, {
+      await fetch(`${API_BASE}/save_landing_page`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -74,128 +60,122 @@ const Setflow = () => {
           cta_position: selectedPosition || null,
         }),
       });
-
-      const data = await response.json();
-      console.log("Landing Page Saved:", data);
     } catch (err) {
       console.error("Error saving landing page:", err);
     }
   };
 
-  // ----------------------------
-  // Save current step dynamically
-  // ----------------------------
   const saveStep = async () => {
-  const userId = localStorage.getItem("userId");
-  if (!userId) {
-    alert("User not logged in.");
-    return;
-  }
+    const userId = localStorage.getItem("userId");
+    if (!userId) return alert("User not logged in.");
 
-  const stepName = steps[activeIndex];
+    const stepName = steps[activeIndex];
 
-  try {
-    const response = await fetch(`${API_BASE}/create_flow`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        user_id: userId,
-        flow_name: stepName,
-        description: `${stepName} saved successfully`,
-        cta_position: selectedPosition || null,
-        thumbnail: uploadedThumbnailUrl || null,
-      }),
-    });
+    try {
+      const res = await fetch(`${API_BASE}/create_flow`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: userId,
+          flow_name: stepName,
+          description: `${stepName} saved successfully`,
+          cta_position: selectedPosition || null,
+          thumbnail: uploadedThumbnailUrl || null,
+        }),
+      });
 
-    const data = await response.json();
+      const data = await res.json();
+      if (!res.ok) {
+        alert("Failed to save step: " + data.error);
+        return;
+      }
 
-    if (!response.ok) {
-      alert(`Failed to save step: ${data.error}`);
-      return;
+      if (data.flow_id) localStorage.setItem("flow_id", data.flow_id);
+      if (stepName === "Landing Page") await saveLandingPage(data.flow_id, userId);
+    } catch (err) {
+      console.error("Error saving step:", err);
+      alert("Failed to save step.");
     }
+  };
 
-    console.log("Step Saved:", data);
+  const validateStep = async () => {
+    const stepName = steps[activeIndex];
 
-    // ✅ Save the flow_id into localStorage so Questionnaire can access it
-    if (data.flow_id) {
-      localStorage.setItem("flow_id", data.flow_id);
-    }
-
-    // EXTRA CALL ONLY FOR LANDING PAGE
     if (stepName === "Landing Page") {
-      await saveLandingPage(data.flow_id, userId);
+      if (!uploadedThumbnailUrl && !selectedPosition) {
+        alert("Upload thumbnail OR select CTA position.");
+        return false;
+      }
+      return true;
     }
 
-  } catch (error) {
-    console.error("Error saving step:", error);
-    alert("Failed to save step.");
-  }
-};
+    if (stepName === "Questionaire") {
+      if (typeof currentSaveFunction === "function") {
+        return await currentSaveFunction();
+      }
+      return false;
+    }
 
-  const goNext = async () => {
+    return true;
+  };
+
+  const handleSaveNext = async () => {
+    const isValid = await validateStep();
+    if (!isValid) return;
+
     await saveStep();
     if (activeIndex < steps.length - 1) setActiveIndex(activeIndex + 1);
   };
 
- const goSkip = () => {
-  // JUST MOVE TO NEXT STEP — NO SAVE
-  if (activeIndex < steps.length - 1) {
-    setActiveIndex(activeIndex + 1);
-  }
-};
-
+  const goSkip = () => {
+    if (activeIndex < steps.length - 1) setActiveIndex(activeIndex + 1);
+  };
 
   const handleFinalSave = async () => {
     await saveStep();
     setIsCompleted(true);
   };
 
-  // ----------------------------
-  // Step content
-  // ----------------------------
   const contents = [
-    <div className="flex flex-col gap-4" key="landing">
-  <label className="font-semibold">Add Thumbnail:</label>
-  <input
-    type="file"
-    accept="image/*"
-    onChange={handleFileChange}
-    className="border border-gray-300 rounded p-2"
-  />
-
-  {thumbnail && (
-    <div className="mt-4">
-      <p className="font-semibold">Preview:</p>
-      <img
-        src={thumbnail}
-        alt="Thumbnail Preview"
-        className="h-32 w-32 object-cover rounded"
+    <div key="landing" className="flex flex-col gap-4">
+      <label className="font-semibold">Add Thumbnail:</label>
+      <input
+        type="file"
+        accept="image/*"
+        onChange={handleFileChange}
+        className="border p-2 rounded"
       />
-    </div>
-  )}
 
-  <div className="flex flex-col gap-2 mt-4">
-    <label className="font-semibold cursor-pointer">CTA Button Position:</label>
+      {thumbnail && (
+        <div className="mt-4">
+          <p className="font-semibold">Preview:</p>
+          <img src={thumbnail} alt="Thumbnail" className="h-32 w-32 object-cover rounded" />
+        </div>
+      )}
 
-    <select
-      value={selectedPosition}
-      onChange={(e) => setSelectedPosition(e.target.value)}
-      className="bg-white py-2 px-4 rounded border-2 border-gray-200 cursor-pointer w-max hover:border-gray-300"
-    >
-      <option value="">Select</option>
-      <option value="left">Left</option>
-      <option value="right">Right</option>
-      <option value="top">Top</option>
-      <option value="bottom">Bottom</option>
-    </select>
-  </div>
-</div>,
+      <div className="flex flex-col gap-2 mt-4">
+        <label className="font-semibold">CTA Button Position:</label>
+        <select
+          value={selectedPosition}
+          onChange={(e) => setSelectedPosition(e.target.value)}
+          className="bg-white py-2 px-4 rounded border-2 w-max"
+        >
+          <option value="">Select</option>
+          <option value="left">Left</option>
+          <option value="right">Right</option>
+          <option value="top">Top</option>
+          <option value="bottom">Bottom</option>
+        </select>
+      </div>
+    </div>,
 
-       <Questionaire
-      key="questionaire"
-      questionnaire={questionnaire}
-      setQuestionnaire={setQuestionnaire}
-    />,
+    <Questionaire
+  key={activeIndex} // force remount when activeIndex changes
+  setSaveFunction={setCurrentSaveFunction}
+/>,
+
+
+
 
     <div key="capture">Content for Capture</div>,
     <div key="contact">Content for Contact</div>,
@@ -213,59 +193,44 @@ const Setflow = () => {
             <button
               disabled={!isCompleted}
               onClick={() => isCompleted && setActiveIndex(index)}
-              className={`flex-1 py-3 text-center font-bold rounded transition-colors duration-300 
+              className={`flex-1 py-3 text-center font-bold rounded transition 
                 ${activeIndex === index ? "bg-[#00bcd4] text-white" : "bg-gray-200"} 
                 ${!isCompleted ? "cursor-not-allowed opacity-60" : "hover:bg-gray-300"}`}
             >
               {step}
             </button>
-            {/* Add arrow between buttons except after last one */}
-            {index < steps.length - 1 && (
-              <span className="mx-2 text-gray-500 font-bold">→</span>
-            )}
+            {index < steps.length - 1 && <span className="mx-2 font-bold text-gray-500">→</span>}
           </React.Fragment>
         ))}
       </div>
 
-      <div className="p-6 border border-gray-300 rounded min-h-[150px] bg-gray-50 flex flex-col gap-4">
-  <div className="flex-1">
-    {contents[activeIndex]}
-  </div>
+      <div className="p-6 border rounded min-h-[150px] bg-gray-50 flex flex-col gap-4">
+        <div className="flex-1">{contents[activeIndex]}</div>
 
-  <div className="flex justify-end gap-3">
-    {activeIndex > 0 && (
-      <button
-        onClick={() => setActiveIndex(activeIndex - 1)}
-        className="px-4 py-2 bg-[#00bcd4] text-white rounded hover:bg-[#009aae]"
-      >
-        Previous
-      </button>
-    )}
-    {activeIndex !== steps.length - 1 && (
-      <button
-        onClick={goSkip}
-        className="px-4 py-2 bg-gray-300 text-black rounded hover:bg-gray-400"
-      >
-        Skip
-      </button>
-    )}
-    {activeIndex === steps.length - 1 ? (
-      <button
-        onClick={handleFinalSave}
-        className="px-4 py-2 bg-[#00bcd4] text-white rounded hover:bg-[#009aae]"
-      >
-        Save
-      </button>
-    ) : (
-      <button
-        onClick={goNext}
-        className="px-4 py-2 bg-[#00bcd4] text-white rounded hover:bg-[#009aae]"
-      >
-        Save & Next
-      </button>
-    )}
-  </div>
-</div>
+        <div className="flex justify-end gap-3">
+          {activeIndex > 0 && (
+            <button
+              onClick={() => setActiveIndex(activeIndex - 1)}
+              className="px-4 py-2 bg-[#00bcd4] text-white rounded hover:bg-[#009aae]">
+              Previous
+            </button>
+          )}
+
+          {activeIndex !== steps.length - 1 && (
+            <button
+              onClick={goSkip}
+              className="px-4 py-2 bg-gray-300 text-black rounded hover:bg-gray-400">
+              Skip
+            </button>
+          )}
+
+          <button
+            onClick={activeIndex === steps.length - 1 ? handleFinalSave : handleSaveNext}
+            className="px-4 py-2 bg-[#00bcd4] text-white rounded hover:bg-[#009aae]">
+            {activeIndex === steps.length - 1 ? "Save" : "Save & Next"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

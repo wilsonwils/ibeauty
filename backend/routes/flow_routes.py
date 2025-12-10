@@ -121,8 +121,8 @@ def save_landing_page():
 # ----------------------------------------------------
 # SAVE QUESTIONNAIRE (FRONTEND YES/NO MAPPED)
 # ----------------------------------------------------
-@flow_bp.post("/save_questionnaire")
-def save_questionnaire():
+@flow_bp.post("/save_questionaire")
+def save_questionaire():
     try:
         data = request.get_json()
         flow_id = data.get("flow_id")
@@ -163,6 +163,8 @@ def save_questionnaire():
                 options = {"min_age": config.get("keyValue")}
             elif label == "Skin Type":
                 options = {"skin_type": config.get("keyValue")}
+            elif input_type == "multi-select":
+                options = {"selected": config.get("keyValue", [])}
             else:
                 options = config.get("options") if input_type == "select" else None
             # -------------------------------------------------------
@@ -177,7 +179,7 @@ def save_questionnaire():
                 organization_id,
                 user_id,
                 label,
-                key,  # 👈 always yes/no
+                key,  
                 input_type,
                 config.get("required", False),
                 json.dumps(options) if options else None,
@@ -190,7 +192,7 @@ def save_questionnaire():
         conn.commit()
 
         return jsonify({
-            "message": "Questionnaire saved",
+            "message": "Questionaire saved",
             "question_ids": question_ids,
             "organization_id": organization_id
         }), 201
