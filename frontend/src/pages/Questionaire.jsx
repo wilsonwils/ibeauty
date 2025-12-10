@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { API_BASE } from "../utils/api";
 
 const questionnaireFields = {
   Gender: {
@@ -85,7 +86,7 @@ const Questionnaire = () => {
     });
 
     try {
-      const res = await fetch("http://localhost:5000/save_questionnaire", {
+      const res = await fetch(`${API_BASE}/save_questionnaire`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -99,7 +100,7 @@ const Questionnaire = () => {
       const data = await res.json();
 
       if (res.ok) {
-        alert("Questionnaire saved successfully");
+        alert("Saved successfully")
       } else {
         alert("Error: " + data.error);
       }
