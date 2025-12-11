@@ -148,15 +148,17 @@ const Addproduct = () => {
             />
           </div>
 
-          <div className="flex-1 min-w-[200px]">
-            <label className="block text-gray-700 mb-1">Description</label>
-            <input
-              type="text"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full border p-2 rounded"
-            />
-          </div>
+<div className="flex-1 min-w-[200px]">
+  <label className="block text-gray-700 mb-1">Description</label>
+  <textarea
+    value={description}
+    onChange={(e) => setDescription(e.target.value)}
+    className="w-full border p-2 rounded"
+    rows={4} // you can adjust the number of visible rows
+    placeholder="Enter description here"
+  />
+</div>
+
         </div>
 
         {/* Second row */}
