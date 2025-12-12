@@ -426,28 +426,35 @@ function LoginSign() {
   /* ----------------------------------
      Login Submit
   ---------------------------------- */
-  const handleLogin = async (e) => {
-    e.preventDefault();
+ const handleLogin = async (e) => {
+  e.preventDefault();
 
-    try {
-      const res = await api("/login", {
-        method: "POST",
-        body: JSON.stringify({ ...loginData }),
-      });
+  try {
+    const res = await api("/login", {
+      method: "POST",
+      body: JSON.stringify({ ...loginData }),
+    });
 
-      const data = await res.json();
+    const data = await res.json();
 
-      if (res.ok) {
-        localStorage.setItem("userId", data.userId);
-        navigate("/i-beauty/dashboard");
-      } else {
-        setErrorMessage(data.error || "Invalid login credentials");
-      }
-    } catch (err) {
-      console.error(err);
-      setErrorMessage("Something went wrong");
+    if (res.ok) {
+      // Save token
+      localStorage.setItem("AUTH_TOKEN", data.token);
+
+      // Save userId or org if needed
+      localStorage.setItem("userId", data.userId);
+      localStorage.setItem("orgId", data.organizationId);
+
+      // Redirect after login
+      navigate("/i-beauty/dashboard");
+    } else {
+      setErrorMessage(data.error || "Invalid login credentials");
     }
-  };
+  } catch (err) {
+    console.error(err);
+    setErrorMessage("Something went wrong");
+  }
+};
 
   /* ----------------------------------
      Social Login

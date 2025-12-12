@@ -1,39 +1,16 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import ProductCard from "../components/ProductCard";
 import Side from "../components/Side";
 import { useNavigate } from "react-router-dom";
-import { useUser } from "../context/UserContext"; // use global user
-
-const products = [
-
-  {
-    title: "Skin Analyzer",
-    text: "Lorem ipsum...",
-    btn: "Try now",
-    bg: "#fe327b",
-    shadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
-  },
-    {
-    title: "Makeup",
-    text: "Lorem ipsum...",
-    btn: "Try now",
-    bg: "#450693",
-    shadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
-  },
-    {
-    title: "Hair",
-    text: "Lorem ipsum...",
-    btn: "Get started",
-    bg: "#8c00ff",
-    shadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
-  },
- 
-];
-
+import { useUser } from "../context/UserContext";
+import { getModules } from "../services/moduleService";
+import { api } from "../utils/api";
 const Dashboard = () => {
-  const { user, loading } = useUser();      // <-- clean global user
+  const { user, loading } = useUser();
   const [sideOpen, setSideOpen] = useState(false);
   const [open, setOpen] = useState(false);
+
+  const [modules, setModules] = useState([]);
   const navigate = useNavigate();
 
   const today = new Date().toLocaleDateString();
@@ -42,6 +19,46 @@ const Dashboard = () => {
     localStorage.removeItem("userId");
     navigate("/i-beauty");
   };
+
+  // -----------------------------
+  // 🔥 Fetch Modules From API
+  // -----------------------------
+  const fetchModules = async () => {
+    try {
+      const result = await getModules();
+      setModules(result.data || result); // Adjust based on your backend response
+    } catch (error) {
+      console.error("Module fetch error:", error);
+    }
+  };
+  
+  
+  const handleModuleClick = async (item) => {
+  try {
+    const res = await api("/check-module-access", {
+      method: "POST",
+      body: JSON.stringify({ moduleId: item.id }),
+    });
+
+    const data = await res.json();
+
+    if (data.access) {
+      navigate(`/i-beauty/product/${item.title}`);
+    } else {
+      alert(data.message || "Not subscribed to this module");
+    }
+
+  } catch (err) {
+    console.error("Module access error", err);
+    alert("Unable to verify module access");
+  }
+};
+
+
+  // Fetch modules when page loads
+  useEffect(() => {
+    fetchModules();
+  }, []);
 
   if (loading) {
     return (
@@ -123,8 +140,8 @@ const Dashboard = () => {
           <h2 className="text-3xl font-semibold mb-8">Products</h2>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-8">
-            {products.map((item) => (
-              <ProductCard key={item.title} item={item} />
+            {modules.map((item) => (
+              <ProductCard key={item.id || item.title} item={item}  onClick={handleModuleClick}  />
             ))}
           </div>
         </main>

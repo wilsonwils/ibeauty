@@ -9,12 +9,12 @@ function OutlineIcon() {
   );
 }
 
-export default function ProductCard({ item }) {
+export default function ProductCard({ item, onClick }) {
   const navigate = useNavigate();
 
   return (
     <div
-      onClick={() => navigate(`/i-beauty/product/${item.title}`)}
+      onClick={() => onClick(item)}   // 🔥 use passed function
       className="rounded-3xl text-white p-6 flex flex-col gap-4 transition-transform duration-200 hover:-translate-y-1 cursor-pointer"
       style={{
         backgroundColor: item.bg,

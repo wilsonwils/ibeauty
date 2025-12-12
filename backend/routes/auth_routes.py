@@ -1,19 +1,65 @@
 from flask import Blueprint, request, jsonify, redirect
+import os
 import requests
+import secrets
+from datetime import datetime, timedelta
+import jwt
+from passlib.hash import bcrypt
+
 
 from database import get_connection
-from utils.password_utils import verify_password, safe_pw
-from utils.recaptcha import verify_recaptcha, USE_RECAPTCHA, RECAPTCHA_SECRET
+from utils.password_utils import verify_password
+from utils.recaptcha import USE_RECAPTCHA, RECAPTCHA_SECRET
 from services.email_service import send_verification_email
-import secrets
-from passlib.hash import bcrypt
-from datetime import datetime
 
+# ---------------------------------------------
+# JWT CONFIG
+# ---------------------------------------------
+SECRET_KEY = os.getenv("JWT_SECRET", "fallback_dev_secret")   # fallback for local dev
+ALGORITHM = "HS256"
+
+def create_token(data: dict):
+    payload = data.copy()
+    payload["exp"] = datetime.utcnow() + timedelta(hours=2)
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+def decode_token(token: str):
+    try:
+        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        return None
+    except jwt.InvalidTokenError:
+        return None
+
+
+# ---------------------------------------------
+# BLUEPRINT INIT (MUST COME FIRST)
+# ---------------------------------------------
 auth_bp = Blueprint("auth", __name__)
 
-# -------------------------------------------------------------------
+
+# ---------------------------------------------
+# Protected Route
+# ---------------------------------------------
+@auth_bp.get("/protected")
+def protected():
+    token = request.headers.get("Authorization")
+
+    if not token:
+        return jsonify({"error": "Token required"}), 401
+
+    token = token.replace("Bearer ", "")
+    payload = decode_token(token)
+
+    if not payload:
+        return jsonify({"error": "Invalid or expired token"}), 401
+
+    return jsonify({"message": "Success!", "data": payload})
+
+
+# ---------------------------------------------
 # SIGNUP
-# -------------------------------------------------------------------
+# ---------------------------------------------
 @auth_bp.post("/signup")
 def signup():
     data = request.json or {}
@@ -22,21 +68,23 @@ def signup():
         captcha_token = data.get("captcha_token")
         if not captcha_token:
             return jsonify({"status": "error", "message": "Captcha token missing"}), 400
+
         try:
             captcha_data = requests.post(
                 "https://www.google.com/recaptcha/api/siteverify",
                 data={"secret": RECAPTCHA_SECRET, "response": captcha_token},
                 timeout=10
             ).json()
+
             if not captcha_data.get("success"):
                 return jsonify({"status": "error", "message": "Captcha verification failed"}), 400
+
         except Exception as e:
             return jsonify({"status": "error", "message": str(e)}), 400
 
     first = data.get("firstName")
     last = data.get("lastName")
     email = data.get("email")
-    phone = data.get("phone")
     password = data.get("password")
     org_name = data.get("organization")
 
@@ -44,26 +92,21 @@ def signup():
         return jsonify({"status": "error", "message": "Missing required fields"}), 400
 
     full_name = f"{first} {last}"
-
-    # Password hashing
     password_hash = bcrypt.hash(password)
 
-    # Generate verification token (store in oauth_provider_id)
-    verify_token = secrets.token_urlsafe(32)
+    # FIX: rename variable to avoid overwriting function
+    email_verify_token = secrets.token_urlsafe(32)
 
     conn = get_connection()
     cur = conn.cursor()
 
     try:
-        # Ensure email is not already used within any organization (or adapt rule as needed)
+        # Check existing email
         cur.execute("SELECT 1 FROM users WHERE email=%s", (email,))
         if cur.fetchone():
-            return jsonify({
-                "status": "error",
-                "message": "Email already registered. Please login."
-            }), 400
+            return jsonify({"status": "error", "message": "Email already registered"}), 400
 
-        # Insert organization and get integer id
+        # Create organization
         cur.execute("""
             INSERT INTO organizations (name, website, plan, created_at)
             VALUES (%s, %s, %s, NOW())
@@ -71,28 +114,25 @@ def signup():
         """, (org_name, None, "free"))
         org_id = cur.fetchone()[0]
 
-        # Insert user and get id
+        # Create user
         cur.execute("""
             INSERT INTO users
             (organization_id, email, password_hash, oauth_provider, oauth_provider_id, full_name, role, is_active, created_at)
             VALUES (%s, %s, %s, NULL, %s, %s, %s, FALSE, NOW())
             RETURNING id
-        """, (org_id, email, password_hash, verify_token, full_name, 'user'))
+        """, (org_id, email, password_hash, email_verify_token, full_name, 'user'))
         user_id = cur.fetchone()[0]
 
         conn.commit()
 
-        # Send verification email (your implementation)
         try:
-            from send_email import send_verification_email
-            send_verification_email(email, verify_token)
+            send_verification_email(email, email_verify_token)
         except Exception:
-            # It's okay if email sending fails here; we already created the user.
             pass
 
         return jsonify({
             "status": "success",
-            "message": "Account created. Please verify your email.",
+            "message": "Account created. Please verify email.",
             "organizationId": org_id,
             "userId": user_id
         }), 201
@@ -105,9 +145,10 @@ def signup():
         cur.close()
         conn.close()
 
-# -------------------------------------------------------------------
+
+# ---------------------------------------------
 # EMAIL VERIFICATION
-# -------------------------------------------------------------------
+# ---------------------------------------------
 @auth_bp.get("/verify/<token>")
 def verify(token):
     conn = get_connection()
@@ -115,12 +156,12 @@ def verify(token):
 
     try:
         cur.execute("SELECT id FROM users WHERE oauth_provider_id=%s", (token,))
-        user = cur.fetchone()
+        row = cur.fetchone()
 
-        if not user:
+        if not row:
             return redirect("http://localhost:5173/verify?status=invalid")
 
-        user_id = user[0]
+        user_id = row[0]
 
         cur.execute("""
             UPDATE users
@@ -129,17 +170,18 @@ def verify(token):
                 oauth_provider_id = NULL
             WHERE id=%s
         """, (user_id,))
-
         conn.commit()
+
         return redirect("http://localhost:5173/verify?status=success")
 
     finally:
         cur.close()
         conn.close()
 
-# -------------------------------------------------------------------
+
+# ---------------------------------------------
 # LOGIN
-# -------------------------------------------------------------------
+# ---------------------------------------------
 @auth_bp.post("/login")
 def login():
     data = request.json or {}
@@ -151,6 +193,7 @@ def login():
 
     conn = get_connection()
     cur = conn.cursor()
+
     try:
         cur.execute("""
             SELECT id, password_hash, organization_id, is_verified
@@ -164,69 +207,39 @@ def login():
 
         user_id, stored_hash, org_id, verified = row
 
-        # If you have an is_verified column, ensure it's present in DB schema. If not, adapt.
-        if hasattr(row, '__len__') and verified is False:
+        if not verified:
             return jsonify({"error": "Please verify your email"}), 401
 
         if not verify_password(raw_password, stored_hash):
             return jsonify({"error": "Incorrect password"}), 401
 
+        # Activate user
         cur.execute("UPDATE users SET is_active = TRUE WHERE id=%s", (user_id,))
         conn.commit()
+
+        # Create JWT token
+        token = create_token({"user_id": user_id, "organization_id": org_id})
 
         return jsonify({
             "message": "Login successful",
             "userId": user_id,
-            "organizationId": org_id
+            "organizationId": org_id,
+            "token": token
         }), 200
 
     finally:
         cur.close()
         conn.close()
 
-# -------------------------------------------------------------------
-# SOCIAL LOGIN
-# -------------------------------------------------------------------
-@auth_bp.post("/social-login")
-def social_login():
-    data = request.json or {}
-    email = data.get("email")
 
-    if not email:
-        return jsonify({"error": "Email required"}), 400
-
-    conn = get_connection()
-    cur = conn.cursor()
-
-    try:
-        cur.execute("SELECT id, is_verified FROM users WHERE email=%s", (email,))
-        row = cur.fetchone()
-
-        if not row:
-            return jsonify({"userExists": False}), 200
-
-        user_id, verified = row
-
-        cur.execute("UPDATE users SET is_active = TRUE WHERE id=%s", (user_id,))
-        conn.commit()
-
-        return jsonify({
-            "userExists": True,
-            "isVerified": verified,
-            "userId": user_id
-        }), 200
-
-    finally:
-        cur.close()
-        conn.close()
-
-# -------------------------------------------------------------------
+# ---------------------------------------------
 # GET USER
-# -------------------------------------------------------------------
+# ---------------------------------------------
 @auth_bp.get("/user/<int:user_id>")
 def get_user(user_id):
     conn = get_connection()
     cur = conn.cursor()
+
     try:
         cur.execute("""
             SELECT id, full_name, email, is_verified, role, is_active, organization_id
@@ -252,26 +265,136 @@ def get_user(user_id):
         cur.close()
         conn.close()
 
-# -------------------------------------------------------------------
-# LOGOUT
-# -------------------------------------------------------------------
-@auth_bp.post("/logout")
-def logout():
-    data = request.json or {}
-    user_id = data.get("userId")
 
-    if user_id is None:
-        return jsonify({"error": "User ID required"}), 400
+# ---------------------------------------------
+# GET Modules
+# ---------------------------------------------
+@auth_bp.get("/modules")
+def get_modules():
+    # 1️⃣ Read token from Authorization header
+    token = request.headers.get("Authorization")
+
+    if not token:
+        return jsonify({"error": "Token required"}), 401
+
+    # 2️⃣ Clean token
+    token = token.replace("Bearer ", "").strip()
+
+    # 3️⃣ Verify token
+    payload = decode_token(token)
+    if not payload:
+        return jsonify({"error": "Invalid or expired token"}), 401
+
+    # 4️⃣ Extract user + org from token
+    user_id = payload.get("user_id")
+    organization_id = payload.get("organization_id")
+
+    # 5️⃣ Query DB
+    conn = get_connection()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("""
+            SELECT id, name, description
+            FROM modules
+        """)
+
+        rows = cur.fetchall()
+
+        modules = [{
+            "id": r[0],
+            "title": r[1],
+            "text": r[2],
+            "bg": '#25afc1',
+            "shadow": '4'
+           
+        } for r in rows]
+
+        return jsonify({
+            "status": "success",
+            "data": modules,
+            "userId": user_id,
+            "organizationId": organization_id
+        })
+
+    finally:
+        cur.close()
+        conn.close()
+
+
+# ---------------------------------------------
+
+@auth_bp.post("/check-module-access")
+def check_module_access():
+    token = request.headers.get("Authorization")
+    if not token:
+        return jsonify({"error": "Token required"}), 401
+
+    token = token.replace("Bearer ", "").strip()
+    payload = decode_token(token)
+
+    if not payload:
+        return jsonify({"error": "Invalid or expired token"}), 401
+
+    user_id = payload["user_id"]
+    organization_id = payload["organization_id"]
+
+    data = request.json or {}
+    module_id = data.get("moduleId")
+
+    if not module_id:
+        return jsonify({"error": "moduleId required"}), 400
 
     conn = get_connection()
     cur = conn.cursor()
+
     try:
-        cur.execute("UPDATE users SET is_active = FALSE WHERE id=%s", (user_id,))
-        conn.commit()
-        return jsonify({"message": "Logged out successfully"}), 200
+        cur.execute("""
+            SELECT payment_status
+            FROM organization_modules
+            WHERE organization_id = %s
+              AND module_id = %s
+        """, (organization_id, module_id))
+
+        row = cur.fetchone()
+
+        if not row:
+            return jsonify({"access": False, "message": "Module not found"}), 200
+
+        payment_status = row[0]
+
+        if payment_status != "Success":
+            return jsonify({"access": False, "message": "Subscription inactive"}), 200
+
+        # ACCESS GRANTED
+        return jsonify({"access": True, "message": "Access granted"}), 200
+
     finally:
         cur.close()
         conn.close()
 
 
 
+
+# ---------------------------------------------
+# LOGOUT
+# ---------------------------------------------
+@auth_bp.post("/logout")
+def logout():
+    data = request.json or {}
+    user_id = data.get("userId")
+
+    if not user_id:
+        return jsonify({"error": "User ID required"}), 400
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("UPDATE users SET is_active = FALSE WHERE id=%s", (user_id,))
+        conn.commit()
+        return jsonify({"message": "Logged out successfully"}), 200
+
+    finally:
+        cur.close()
+        conn.close()
