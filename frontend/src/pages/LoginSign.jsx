@@ -8,6 +8,7 @@ import { FcGoogle } from "react-icons/fc";
 import { FaApple, FaPhone } from "react-icons/fa";
 import { FiUser, FiMail, FiEye, FiEyeOff } from "react-icons/fi";
 import { api } from "../utils/api";
+import { getTokenPayload, isTokenValid } from "../utils/auth";
 
 /* ----------------------------------
    Reusable Input Field
@@ -432,60 +433,74 @@ function LoginSign() {
   try {
     const res = await api("/login", {
       method: "POST",
-      body: JSON.stringify({ ...loginData }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(loginData),
     });
 
     const data = await res.json();
+    console.log("Login response:", data);
 
-    if (res.ok) {
+    if (res.ok && data.token) {
       // Save token
       localStorage.setItem("AUTH_TOKEN", data.token);
-
-      // Save userId or org if needed
       localStorage.setItem("userId", data.userId);
       localStorage.setItem("orgId", data.organizationId);
 
-      // Redirect after login
-      navigate("/i-beauty/dashboard");
+      // ✅ Optional: check token validity immediately
+      if (isTokenValid(data.token)) {
+        const payload = getTokenPayload(data.token);
+        console.log("Token payload:", payload);
+        navigate("/i-beauty/dashboard");
+      } else {
+        console.warn("Token expired or invalid");
+        setErrorMessage("Login failed: token invalid");
+      }
     } else {
-      setErrorMessage(data.error || "Invalid login credentials");
+      setErrorMessage(data.error || data.message || "Invalid login credentials");
     }
   } catch (err) {
-    console.error(err);
+    console.error("Login error:", err);
     setErrorMessage("Something went wrong");
   }
 };
+
 
   /* ----------------------------------
      Social Login
   ---------------------------------- */
   const handleSocialLogin = async (provider) => {
-    try {
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
+  try {
+    const result = await signInWithPopup(auth, provider);
+    const user = result.user;
+    if (!user?.email) return setErrorMessage("Provider did not return an email.");
 
-      if (!user?.email) return setErrorMessage("Provider did not return an email.");
+    const res = await api("/social-login", {
+      method: "POST",
+      body: JSON.stringify({ email: user.email }),
+    });
 
-      const res = await api("/social-login", {
-        method: "POST",
-        body: JSON.stringify({ email: user.email }),
-      });
+    const data = await res.json();
 
-      const data = await res.json();
+    if (data.userExists && data.isVerified && data.token) {
+      localStorage.setItem("AUTH_TOKEN", data.token);
+      localStorage.setItem("userId", data.userId);
+      localStorage.setItem("orgId", data.organizationId);
 
-      if (data.userExists && data.isVerified) {
-        localStorage.setItem("userId", data.userId);
+      if (isTokenValid(data.token)) {
         navigate("/i-beauty/dashboard");
-      } else if (data.userExists && !data.isVerified) {
-        setErrorMessage("Verify your email before logging in.");
       } else {
-        navigate("/i-beauty");
+        setErrorMessage("Token invalid or expired");
       }
-    } catch (err) {
-      console.error(err);
-      setErrorMessage("Social login failed");
+    } else if (data.userExists && !data.isVerified) {
+      setErrorMessage("Verify your email before logging in.");
+    } else {
+      navigate("/i-beauty");
     }
-  };
+  } catch (err) {
+    console.error(err);
+    setErrorMessage("Social login failed");
+  }
+};
 
   return (
         <div className="min-h-screen bg-gray-50 px-4 py-8">

@@ -7,6 +7,7 @@ import jwt
 from passlib.hash import bcrypt
 
 
+
 from database import get_connection
 from utils.password_utils import verify_password
 from utils.recaptcha import USE_RECAPTCHA, RECAPTCHA_SECRET
@@ -185,10 +186,11 @@ def verify(token):
 @auth_bp.post("/login")
 def login():
     data = request.json or {}
-    email = data.get("email")
-    raw_password = data.get("password")
 
-    if not email or not raw_password:
+    email = data.get("email")
+    password = data.get("password")
+
+    if not email or not password:
         return jsonify({"error": "Email and password required"}), 400
 
     conn = get_connection()
@@ -208,28 +210,28 @@ def login():
         user_id, stored_hash, org_id, verified = row
 
         if not verified:
-            return jsonify({"error": "Please verify your email"}), 401
+            return jsonify({"error": "Please verify email"}), 401
 
-        if not verify_password(raw_password, stored_hash):
+        if not verify_password(password, stored_hash):
             return jsonify({"error": "Incorrect password"}), 401
 
-        # Activate user
-        cur.execute("UPDATE users SET is_active = TRUE WHERE id=%s", (user_id,))
-        conn.commit()
-
-        # Create JWT token
-        token = create_token({"user_id": user_id, "organization_id": org_id})
+        # Create token
+        token = create_token({
+            "user_id": user_id,
+            "organization_id": org_id
+        })
 
         return jsonify({
             "message": "Login successful",
+            "token": token,
             "userId": user_id,
-            "organizationId": org_id,
-            "token": token
+            "organizationId": org_id
         }), 200
 
     finally:
         cur.close()
         conn.close()
+
 
 
 # ---------------------------------------------

@@ -2,11 +2,15 @@ import React, { useState, useEffect } from "react";
 import { API_BASE } from "../utils/api";
 
 const LandingPage = ({ data, setData, setSaveFunction }) => {
-  const [uploadedThumbnailUrl, setUploadedThumbnailUrl] = useState(data.uploadedThumbnailUrl || null);
-  const [selectedPosition, setSelectedPosition] = useState(data.selectedPosition || "");
+  const [uploadedThumbnailUrl, setUploadedThumbnailUrl] = useState(
+    data.uploadedThumbnailUrl || null
+  );
+  const [selectedPosition, setSelectedPosition] = useState(
+    data.selectedPosition || ""
+  );
   const [isUploading, setIsUploading] = useState(false);
 
-  // Persist changes to parent
+  // Persist changes to parent (UNCHANGED)
   useEffect(() => {
     setData((prev) => ({
       ...prev,
@@ -15,41 +19,42 @@ const LandingPage = ({ data, setData, setSaveFunction }) => {
     }));
   }, [uploadedThumbnailUrl, selectedPosition, setData]);
 
-  // Expose save function
-  useEffect(() => {
-    const saveLandingPage = async () => {
-      const userId = localStorage.getItem("userId");
-      const flowId = localStorage.getItem("flow_id");
-      if (!userId || !flowId) return false;
+ useEffect(() => {
+  const saveLandingPage = async (flowId) => {
+    const userId = localStorage.getItem("userId");
+    const token = localStorage.getItem("AUTH_TOKEN"); 
+    if (!userId || !flowId || !token) return false;
 
-      try {
-        const res = await fetch(`${API_BASE}/save_landing_page`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            flow_id: flowId,
-            user_id: userId,
-            thumbnail: uploadedThumbnailUrl || null,
-            cta_position: selectedPosition || null,
-          }),
-        });
+    try {
+      const res = await fetch(`${API_BASE}/save_landing_page`, {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}` 
+        },
+        body: JSON.stringify({
+          flow_id: flowId,
+          user_id: userId,
+          thumbnail: uploadedThumbnailUrl || null,
+          cta_position: selectedPosition || null,
+        }),
+      });
 
-        const result = await res.json();
+      const result = await res.json();
 
-        if (res.ok && result.id) {
-          // Save landing page ID in state
-          setData((prev) => ({ ...prev, landing_id: result.id }));
-        }
-
-        return res.ok;
-      } catch (err) {
-        console.error("Landing page save error:", err);
-        return false;
+      if (res.ok && result.id) {
+        setData((prev) => ({ ...prev, landing_id: result.id }));
       }
-    };
 
-    setSaveFunction(() => saveLandingPage);
-  }, [uploadedThumbnailUrl, selectedPosition, setData, setSaveFunction]);
+      return res.ok;
+    } catch (err) {
+      console.error("Landing page save error:", err);
+      return false;
+    }
+  };
+
+  setSaveFunction(() => saveLandingPage);
+}, [uploadedThumbnailUrl, selectedPosition, setData, setSaveFunction]);
 
   const handleFileChange = async (e) => {
     const file = e.target.files[0];

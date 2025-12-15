@@ -14,6 +14,7 @@ const Sidebar = () => {
 
   const handleLogout = () => {
     localStorage.removeItem("userId");
+    localStorage.removeItem("AUTH_TOKEN");
     navigate("/i-beauty");
   };
 

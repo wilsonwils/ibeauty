@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { API_BASE } from "../utils/api";
 
 const questionaireFields = {
-  Gender: { type: "multi-select", options: ["Male", "Female", "Other"], multi: true },
+  Gender: { type: "multi-select", options: ["Male", "Female", "Transgender"], multi: true },
   Age: { type: "number", placeholder: "Enter your minimum age" },
   "Skin Type": { type: "text", placeholder: "Enter your skin type" },
   Name: { noInput: true },
@@ -11,86 +11,106 @@ const questionaireFields = {
 
 const Questionaire = ({ data, setData, setSaveFunction }) => {
   const [questionaire, setQuestionaire] = useState(data.questionaire || {});
-  const [answers, setAnswers] = useState(data.answers || {});
+  const [answers, setAnswers] = useState({
+    ...data.answers,
+    Gender: data.answers?.Gender || [],
+    "Skin Type": data.answers?.["Skin Type"] || [],
+  });
   const [required, setRequired] = useState(data.required || {});
   const [skinInput, setSkinInput] = useState("");
-  const [popupMsg, setPopupMsg] = useState(""); // For popup message
+  const [popupMsg, setPopupMsg] = useState("");
 
-  // Persist to parent
+  // Persist changes to parent (UNCHANGED)
   useEffect(() => {
     setData({ questionaire, answers, required });
   }, [questionaire, answers, required]);
 
-  // Show popup for 3 seconds
   const showPopup = (msg) => {
     setPopupMsg(msg);
     setTimeout(() => setPopupMsg(""), 3000);
   };
 
-  // Expose save function to parent
+  // ✅ ONLY flow_id logic fixed here
   useEffect(() => {
-    const saveQuestionaire = async () => {
-      // Validate input for all fields marked "Yes"
+  const saveQuestionaire = async (flowId) => {
+    const user_id = localStorage.getItem("userId");
+    const token = localStorage.getItem("AUTH_TOKEN"); // ✅ get JWT token
+    if (!flowId || !user_id || !token) return false;
+
+    const isSkipMode = Object.keys(questionaire).every(
+      (k) => questionaire[k] === false || questionaire[k] === undefined
+    );
+
+    if (!isSkipMode) {
       for (const field of Object.keys(questionaireFields)) {
         const config = questionaireFields[field];
         if (questionaire[field] && !config.noInput) {
-          if (config.multi) {
-            if (!answers[field] || answers[field].length === 0) {
-              showPopup(`Please select at least one option for "${field}"`);
-              return false;
-            }
-          } else if (field === "Skin Type") {
-            if (!answers["Skin Type"] || answers["Skin Type"].length === 0) {
-              showPopup("Please add at least one skin type");
-              return false;
-            }
-          } else {
-            if (!answers[field] || answers[field].toString().trim() === "") {
-              showPopup(`Please fill the input for "${field}"`);
-              return false;
-            }
+          if (config.multi && (!answers[field] || answers[field].length === 0)) {
+            showPopup(`Please select at least one option for "${field}"`);
+            return false;
+          }
+          if (
+            field === "Skin Type" &&
+            (!answers["Skin Type"] || answers["Skin Type"].length === 0)
+          ) {
+            showPopup("Please add at least one skin type");
+            return false;
+          }
+          if (
+            !config.multi &&
+            field !== "Skin Type" &&
+            (!answers[field] || answers[field].toString().trim() === "")
+          ) {
+            showPopup(`Please fill the input for "${field}"`);
+            return false;
           }
         }
       }
+    }
 
-      const flow_id = localStorage.getItem("flow_id");
-      const user_id = localStorage.getItem("userId");
-      if (!flow_id || !user_id) return false;
+    const fields = {};
+    Object.keys(questionaireFields).forEach((field) => {
+      fields[field] = {
+        yes_no: questionaire[field] ? "yes" : "no",
+        keyValue: answers[field] || (questionaireFields[field].multi ? [] : null),
+        required: required[field] || false,
+        type: questionaireFields[field].type || "yes_no",
+        options: questionaireFields[field].options || null,
+      };
+    });
 
-      const fields = {};
-      Object.keys(questionaireFields).forEach((field) => {
-        fields[field] = {
-          yes_no: questionaire[field] ? "yes" : "no",
-          keyValue: answers[field] || (questionaireFields[field].multi ? [] : null),
-          required: required[field] || false,
-          type: questionaireFields[field].type || "yes_no",
-          options: questionaireFields[field].options || null,
-        };
+    try {
+      const res = await fetch(`${API_BASE}/save_questionaire`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}` // ✅ include JWT token
+        },
+        body: JSON.stringify({
+          flow_id: flowId,
+          user_id,
+          fields,
+          skip: isSkipMode,
+        }),
       });
 
-      try {
-        const res = await fetch(`${API_BASE}/save_questionaire`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ flow_id, user_id, fields }),
-        });
-        const result = await res.json();
-        if (!res.ok) {
-          showPopup(`Failed to save questionaire: ${result.error}`);
-          return false;
-        }
-        showPopup("Questionaire saved successfully!");
-        return true;
-      } catch (err) {
-        showPopup("Failed to save questionaire.");
+      const result = await res.json();
+      if (!res.ok) {
+        showPopup(`Failed to save questionaire: ${result.error}`);
         return false;
       }
-    };
 
-    setSaveFunction(() => saveQuestionaire);
-  }, [answers, questionaire, required, setSaveFunction]);
+      return true;
+    } catch (err) {
+      console.error(err);
+      showPopup("Failed to save questionaire.");
+      return false;
+    }
+  };
 
-  // Gender multi-select toggle
+  setSaveFunction(() => saveQuestionaire);
+}, [answers, questionaire, required, setSaveFunction]);
+
   const toggleGenderOption = (opt) => {
     setAnswers((prev) => ({
       ...prev,
@@ -100,7 +120,6 @@ const Questionaire = ({ data, setData, setSaveFunction }) => {
     }));
   };
 
-  // Skin Type input add/remove
   const addSkinType = () => {
     if (!skinInput.trim()) return;
     setAnswers((prev) => ({
@@ -117,7 +136,6 @@ const Questionaire = ({ data, setData, setSaveFunction }) => {
     }));
   };
 
-  // Handle No click
   const handleNoClick = (field) => {
     setQuestionaire((p) => ({ ...p, [field]: false }));
     setRequired((p) => ({ ...p, [field]: false }));
@@ -131,7 +149,6 @@ const Questionaire = ({ data, setData, setSaveFunction }) => {
     <div className="flex flex-col gap-4 p-4 border border-gray-300 rounded mt-4 relative">
       <h2 className="font-semibold text-lg mb-3">Questionaire</h2>
 
-      {/* Popup message */}
       {popupMsg && (
         <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded shadow-md z-50">
           {popupMsg}
@@ -180,7 +197,7 @@ const Questionaire = ({ data, setData, setSaveFunction }) => {
                       <label key={opt} className="flex items-center gap-2">
                         <input
                           type="checkbox"
-                          checked={answers.Gender?.includes(opt)}
+                          checked={answers.Gender?.includes(opt) || false}
                           onChange={() => toggleGenderOption(opt)}
                         />
                         {opt}
@@ -210,7 +227,7 @@ const Questionaire = ({ data, setData, setSaveFunction }) => {
                           key={index}
                           className="px-3 py-1 bg-gray-200 rounded flex items-center gap-2"
                         >
-                          {type}{" "}
+                          {type}
                           <button
                             onClick={() => removeSkinType(index)}
                             className="text-red-500 font-bold"
@@ -226,7 +243,9 @@ const Questionaire = ({ data, setData, setSaveFunction }) => {
                     type={config.type}
                     placeholder={config.placeholder}
                     value={answers[field] || ""}
-                    onChange={(e) => setAnswers((p) => ({ ...p, [field]: e.target.value }))}
+                    onChange={(e) =>
+                      setAnswers((p) => ({ ...p, [field]: e.target.value }))
+                    }
                     className="border px-3 py-2 rounded w-full"
                   />
                 )}

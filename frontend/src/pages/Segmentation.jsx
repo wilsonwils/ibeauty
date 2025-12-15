@@ -1,0 +1,112 @@
+import React, { useState, useEffect } from "react";
+import { API_BASE } from "../utils/api";
+
+const Segmentation = ({ data, setData, setSaveFunction }) => {
+  const conditions = [
+    "Oiliness",
+    "Dark Circles",
+    "Uneven Skin Tone",
+    "Dark Spots",
+    "Oxygen",
+    "Dullness",
+    "Pigmentation",
+    "Hydration",
+    "Eye Wrinkles",
+    "Skin Firmness",
+    "Wrinkles",
+    "Smoothness",
+    "Texture",
+    "Acne",
+  ];
+
+  // ✅ local state ONLY (same as ContactPage)
+  const [selected, setSelected] = useState(() =>
+    conditions.reduce((acc, c) => {
+      acc[c] = data?.[c] || false;
+      return acc;
+    }, {})
+  );
+
+  const toggle = (field) => {
+    setSelected((prev) => ({ ...prev, [field]: !prev[field] }));
+  };
+
+  // ✅ register save function (same logic as ContactPage)
+  useEffect(() => {
+    const saveSegmentation = async (flowId) => {
+      const token = localStorage.getItem("AUTH_TOKEN");
+      if (!flowId || !token) return false;
+
+      // ✅ collect only selected fields
+      const selectedFields = Object.keys(selected).filter(
+        (k) => selected[k]
+      );
+
+      if (!selectedFields.length) {
+        alert("Select at least one segmentation option");
+        return false;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/save_segmentation`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            flow_id: flowId,
+            segmentation_fields: selectedFields, // 🔥 SAME AS CONTACT
+          }),
+        });
+
+        const result = await res.json();
+        if (!res.ok) {
+          alert(result.error || "Failed to save segmentation");
+          return false;
+        }
+
+        // ✅ update parent ONLY after success
+        const mapped = selectedFields.reduce((acc, f) => {
+          acc[f] = true;
+          return acc;
+        }, {});
+
+        setData({
+          ...mapped,
+          segmentation_id: result.id,
+        });
+
+        return true;
+      } catch (err) {
+        console.error(err);
+        alert("Failed to save segmentation");
+        return false;
+      }
+    };
+
+    setSaveFunction(() => saveSegmentation);
+  }, [selected, setSaveFunction, setData]);
+
+  return (
+    <div className="p-4 border rounded mt-4">
+      <h2 className="font-bold mb-4 text-lg">Segmentation</h2>
+
+      <div className="grid grid-cols-4 gap-4 text-sm font-semibold">
+        {conditions.map((cond) => (
+          <label key={cond} className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={selected[cond]}
+              onChange={() => toggle(cond)}
+              className="w-4 h-4"
+            />
+            <span>{cond}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export default Segmentation;

@@ -1,8 +1,11 @@
+// Setflow.jsx
 import React, { useState } from "react";
 import { API_BASE } from "../utils/api";
 import LandingPage from "./LandingPage";
 import Questionaire from "./Questionaire";
 import CapturePage from "./CapturePage";
+import ContactPage from "./ContactPage";
+import Segmentation from "./Segmentation";
 
 const Setflow = () => {
   const steps = [
@@ -19,133 +22,185 @@ const Setflow = () => {
   const [activeIndex, setActiveIndex] = useState(0);
   const [isCompleted, setIsCompleted] = useState(false);
 
+  const [flowIds, setFlowIds] = useState(
+    JSON.parse(localStorage.getItem("flow_ids")) || {}
+  );
+
+  // -------------------- STEP DATA --------------------
   const [landingData, setLandingData] = useState({});
   const [questionData, setQuestionData] = useState({});
   const [captureData, setCaptureData] = useState({});
+  const [contactData, setContactData] = useState({});
+  const [segmentationData, setSegmentationData] = useState({});
 
+  // -------------------- LAST SAVED --------------------
   const [lastSavedLanding, setLastSavedLanding] = useState({});
   const [lastSavedQuestion, setLastSavedQuestion] = useState({});
   const [lastSavedCapture, setLastSavedCapture] = useState({});
+  const [lastSavedContact, setLastSavedContact] = useState({});
+  const [lastSavedSegmentation, setLastSavedSegmentation] = useState({});
 
   const [currentSaveFunction, setCurrentSaveFunction] = useState(null);
 
   const isDataChanged = (oldData, newData) =>
     JSON.stringify(oldData) !== JSON.stringify(newData);
 
-  const checkPageEmpty = (pageObj) =>
-    Object.values(pageObj).every(
-      (v) => v === null || v === "" || (Array.isArray(v) && v.length === 0)
-    );
-
+  // ==================================================
   // SAVE STEP
+  // ==================================================
   const saveStep = async (skipValue) => {
     const userId = localStorage.getItem("userId");
-    if (!userId) return alert("User not logged in.");
+    const token = localStorage.getItem("AUTH_TOKEN");
+
+    if (!userId || !token) {
+      alert("User not logged in.");
+      return false;
+    }
 
     const stepName = steps[activeIndex];
 
     try {
       const res = await fetch(`${API_BASE}/create_flow`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
           user_id: userId,
           flow_name: stepName,
           description: skipValue
             ? `${stepName} skipped`
             : `${stepName} saved successfully`,
-          thumbnail: landingData.uploadedThumbnailUrl || null,
-          cta_position: landingData.selectedPosition || null,
-          landing_id: landingData.landing_id || null, // <-- pass landing ID
-          skip: skipValue,
         }),
       });
 
       const data = await res.json();
       if (!res.ok) {
-        alert("Failed to save step: " + data.error);
-        return;
+        alert(data.error || "Failed to save step");
+        return false;
       }
 
-      if (data.flow_id) localStorage.setItem("flow_id", data.flow_id);
+      const newFlowId = data.flow_id;
+      if (!newFlowId) return false;
 
-      // SAVE PAGE DATA (Landing / Questionaire / Capture)
+      const updated = { ...flowIds, [stepName]: newFlowId };
+      setFlowIds(updated);
+      localStorage.setItem("flow_ids", JSON.stringify(updated));
+
       if (typeof currentSaveFunction === "function") {
-        await currentSaveFunction();
+        return await currentSaveFunction(newFlowId);
       }
+
+      return true;
     } catch (err) {
-      console.error("Error saving step:", err);
-      alert("Failed to save step.");
+      console.error("Save error:", err);
+      alert("Failed to save step");
+      return false;
     }
   };
 
+  // ==================================================
+  // VALIDATION
+  // ==================================================
   const validateStep = async () => {
     const stepName = steps[activeIndex];
 
     if (stepName === "Landing Page") {
-      if (!landingData.uploadedThumbnailUrl && !landingData.selectedPosition) {
+      if (
+        !landingData.uploadedThumbnailUrl &&
+        !landingData.selectedPosition
+      ) {
         alert("Upload thumbnail OR select CTA position.");
         return false;
       }
     }
-
-    if (stepName === "Questionaire" || stepName === "Capture") {
-      if (typeof currentSaveFunction === "function") {
-        return await currentSaveFunction();
-      }
-      return false;
-    }
-
     return true;
   };
 
+  // ==================================================
+  // SAVE & NEXT
+  // ==================================================
   const handleSaveNext = async () => {
     const stepName = steps[activeIndex];
-    const isValid = await validateStep();
-    if (!isValid) return;
+    const valid = await validateStep();
+    if (!valid) return;
 
     let shouldSave = false;
 
     if (stepName === "Landing Page")
       shouldSave = isDataChanged(lastSavedLanding, landingData);
+
     if (stepName === "Questionaire")
       shouldSave = isDataChanged(lastSavedQuestion, questionData);
+
     if (stepName === "Capture")
       shouldSave = isDataChanged(lastSavedCapture, captureData);
 
-    if (shouldSave) {
-      await saveStep(false);
+    if (stepName === "Contact")
+      shouldSave = isDataChanged(lastSavedContact, contactData);
 
-      if (stepName === "Landing Page") setLastSavedLanding(landingData);
-      if (stepName === "Questionaire") setLastSavedQuestion(questionData);
-      if (stepName === "Capture") setLastSavedCapture(captureData);
+    // ✅ SEGMENTATION MUST ALWAYS SAVE
+    if (stepName === "Segmentation")
+      shouldSave = true;
+
+    if (shouldSave) await saveStep(false);
+
+    // update last saved
+    if (stepName === "Landing Page") setLastSavedLanding(landingData);
+    if (stepName === "Questionaire") setLastSavedQuestion(questionData);
+    if (stepName === "Capture") setLastSavedCapture(captureData);
+    if (stepName === "Contact") setLastSavedContact(contactData);
+    if (stepName === "Segmentation")
+      setLastSavedSegmentation(segmentationData);
+
+    if (activeIndex < steps.length - 1) {
+      setActiveIndex(activeIndex + 1);
     }
-
-    if (activeIndex < steps.length - 1) setActiveIndex(activeIndex + 1);
   };
 
+  // ==================================================
+  // SKIP & NEXT
+  // ==================================================
   const goSkip = async () => {
     const stepName = steps[activeIndex];
-    let hasData = false;
 
-    if (stepName === "Landing Page") hasData = !checkPageEmpty(landingData);
-    if (stepName === "Questionaire") hasData = !checkPageEmpty(questionData);
-    if (stepName === "Capture") hasData = !checkPageEmpty(captureData);
+    let isAlreadySaved = false;
 
-    if (hasData) {
-      if (activeIndex < steps.length - 1) setActiveIndex(activeIndex + 1);
-      return;
+    if (stepName === "Landing Page")
+      isAlreadySaved = Object.keys(lastSavedLanding).length > 0;
+
+    if (stepName === "Questionaire")
+      isAlreadySaved = Object.keys(lastSavedQuestion).length > 0;
+
+    if (stepName === "Capture")
+      isAlreadySaved = Object.keys(lastSavedCapture).length > 0;
+
+    if (stepName === "Contact")
+      isAlreadySaved = Object.keys(lastSavedContact).length > 0;
+
+    // ✅ segmentation always saves on skip
+    if (stepName === "Segmentation")
+      isAlreadySaved = false;
+
+    if (!isAlreadySaved) await saveStep(true);
+
+    if (activeIndex < steps.length - 1) {
+      setActiveIndex(activeIndex + 1);
     }
-
-    await saveStep(true);
-    if (activeIndex < steps.length - 1) setActiveIndex(activeIndex + 1);
   };
 
+  // ==================================================
+  // FINAL SAVE
+  // ==================================================
   const handleFinalSave = async () => {
     await saveStep(false);
     setIsCompleted(true);
   };
 
+  // ==================================================
+  // CONTENT
+  // ==================================================
   const contents = [
     <LandingPage
       key="landing"
@@ -165,13 +220,26 @@ const Setflow = () => {
       setData={setCaptureData}
       setSaveFunction={setCurrentSaveFunction}
     />,
-    <div key="contact">Content for Contact</div>,
-    <div key="segmentation">Content for Segmentation</div>,
+    <ContactPage
+      key="contact"
+      data={contactData}
+      setData={setContactData}
+      setSaveFunction={setCurrentSaveFunction}
+    />,
+    <Segmentation
+      key="segmentation"
+      data={segmentationData}
+      setData={setSegmentationData}
+      setSaveFunction={setCurrentSaveFunction}
+    />,
     <div key="skin_goal">Content for Skin Goal</div>,
     <div key="summary">Content for Summary & Routine</div>,
     <div key="suggest_products">Content for Suggest Products</div>,
   ];
 
+  // ==================================================
+  // RENDER
+  // ==================================================
   return (
     <div className="p-6">
       <div className="flex items-center mb-6">
@@ -180,27 +248,28 @@ const Setflow = () => {
             <button
               disabled={!isCompleted}
               onClick={() => isCompleted && setActiveIndex(index)}
-              className={`flex-1 py-3 text-center font-bold rounded transition 
-              ${activeIndex === index ? "bg-[#00bcd4] text-white" : "bg-gray-200"}
-              ${!isCompleted ? "cursor-not-allowed opacity-60" : "hover:bg-gray-300"}`}
+              className={`flex-1 py-3 font-bold rounded
+                ${activeIndex === index ? "bg-[#00bcd4] text-white" : "bg-gray-200"}
+                ${!isCompleted ? "opacity-60 cursor-not-allowed" : ""}`}
             >
               {step}
             </button>
             {index < steps.length - 1 && (
-              <span className="mx-2 font-bold text-gray-500">→</span>
+              <span className="mx-2 font-bold">→</span>
             )}
           </React.Fragment>
         ))}
       </div>
 
-      <div className="p-6 border rounded min-h-[150px] bg-gray-50 flex flex-col gap-4">
-        <div className="flex-1">{contents[activeIndex]}</div>
+      <div className="p-6 border rounded bg-gray-50 min-h-[150px]">
+        {contents[activeIndex]}
 
-        <div className="flex justify-end gap-3">
+        <div className="flex justify-end gap-3 mt-6">
           {activeIndex > 0 && (
             <button
               onClick={() => setActiveIndex(activeIndex - 1)}
-              className="px-4 py-2 bg-[#00bcd4] text-white rounded hover:bg-[#009aae]">
+              className="px-4 py-2 bg-[#00bcd4] text-white rounded"
+            >
               Previous
             </button>
           )}
@@ -208,14 +277,20 @@ const Setflow = () => {
           {activeIndex !== steps.length - 1 && (
             <button
               onClick={goSkip}
-              className="px-4 py-2 bg-gray-300 text-black rounded hover:bg-gray-400">
+              className="px-4 py-2 bg-gray-300 rounded"
+            >
               Skip & Next
             </button>
           )}
 
           <button
-            onClick={activeIndex === steps.length - 1 ? handleFinalSave : handleSaveNext}
-            className="px-4 py-2 bg-[#00bcd4] text-white rounded hover:bg-[#009aae]">
+            onClick={
+              activeIndex === steps.length - 1
+                ? handleFinalSave
+                : handleSaveNext
+            }
+            className="px-4 py-2 bg-[#00bcd4] text-white rounded"
+          >
             {activeIndex === steps.length - 1 ? "Save" : "Save & Next"}
           </button>
         </div>
