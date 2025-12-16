@@ -13,14 +13,16 @@ const Questionaire = ({ data, setData, setSaveFunction }) => {
   const [questionaire, setQuestionaire] = useState(data.questionaire || {});
   const [answers, setAnswers] = useState({
     ...data.answers,
-    Gender: data.answers?.Gender || [],
-    "Skin Type": data.answers?.["Skin Type"] || [],
+    Gender: Array.isArray(data.answers?.Gender) ? data.answers.Gender : [],
+    "Skin Type": Array.isArray(data.answers?.["Skin Type"])
+      ? data.answers["Skin Type"]
+      : [],
   });
   const [required, setRequired] = useState(data.required || {});
   const [skinInput, setSkinInput] = useState("");
   const [popupMsg, setPopupMsg] = useState("");
 
-  // Persist changes to parent (UNCHANGED)
+ 
   useEffect(() => {
     setData({ questionaire, answers, required });
   }, [questionaire, answers, required]);
@@ -30,86 +32,86 @@ const Questionaire = ({ data, setData, setSaveFunction }) => {
     setTimeout(() => setPopupMsg(""), 3000);
   };
 
-  // ✅ ONLY flow_id logic fixed here
+  // Save function
   useEffect(() => {
-  const saveQuestionaire = async (flowId) => {
-    const user_id = localStorage.getItem("userId");
-    const token = localStorage.getItem("AUTH_TOKEN"); // ✅ get JWT token
-    if (!flowId || !user_id || !token) return false;
+    const saveQuestionaire = async (flowId) => {
+      const user_id = localStorage.getItem("userId");
+      const token = localStorage.getItem("AUTH_TOKEN");
+      if (!flowId || !user_id || !token) return false;
 
-    const isSkipMode = Object.keys(questionaire).every(
-      (k) => questionaire[k] === false || questionaire[k] === undefined
-    );
+      const isSkipMode = Object.keys(questionaire).every(
+        (k) => questionaire[k] === false || questionaire[k] === undefined
+      );
 
-    if (!isSkipMode) {
-      for (const field of Object.keys(questionaireFields)) {
-        const config = questionaireFields[field];
-        if (questionaire[field] && !config.noInput) {
-          if (config.multi && (!answers[field] || answers[field].length === 0)) {
-            showPopup(`Please select at least one option for "${field}"`);
-            return false;
-          }
-          if (
-            field === "Skin Type" &&
-            (!answers["Skin Type"] || answers["Skin Type"].length === 0)
-          ) {
-            showPopup("Please add at least one skin type");
-            return false;
-          }
-          if (
-            !config.multi &&
-            field !== "Skin Type" &&
-            (!answers[field] || answers[field].toString().trim() === "")
-          ) {
-            showPopup(`Please fill the input for "${field}"`);
-            return false;
+      if (!isSkipMode) {
+        for (const field of Object.keys(questionaireFields)) {
+          const config = questionaireFields[field];
+          if (questionaire[field] && !config.noInput) {
+            if (config.multi && (!answers[field] || answers[field].length === 0)) {
+              showPopup(`Please select at least one option for "${field}"`);
+              return false;
+            }
+            if (
+              field === "Skin Type" &&
+              (!answers["Skin Type"] || answers["Skin Type"].length === 0)
+            ) {
+              showPopup("Please add at least one skin type");
+              return false;
+            }
+            if (
+              !config.multi &&
+              field !== "Skin Type" &&
+              (!answers[field] || answers[field].toString().trim() === "")
+            ) {
+              showPopup(`Please fill the input for "${field}"`);
+              return false;
+            }
           }
         }
       }
-    }
 
-    const fields = {};
-    Object.keys(questionaireFields).forEach((field) => {
-      fields[field] = {
-        yes_no: questionaire[field] ? "yes" : "no",
-        keyValue: answers[field] || (questionaireFields[field].multi ? [] : null),
-        required: required[field] || false,
-        type: questionaireFields[field].type || "yes_no",
-        options: questionaireFields[field].options || null,
-      };
-    });
-
-    try {
-      const res = await fetch(`${API_BASE}/save_questionaire`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}` // ✅ include JWT token
-        },
-        body: JSON.stringify({
-          flow_id: flowId,
-          user_id,
-          fields,
-          skip: isSkipMode,
-        }),
+      const fields = {};
+      Object.keys(questionaireFields).forEach((field) => {
+        fields[field] = {
+          yes_no: questionaire[field] ? "yes" : "no",
+          value: answers[field] || (questionaireFields[field].multi ? [] : null),
+          required: required[field] || false,
+          type: questionaireFields[field].type || "yes_no",
+          options: questionaireFields[field].options || null,
+        };
       });
 
-      const result = await res.json();
-      if (!res.ok) {
-        showPopup(`Failed to save questionaire: ${result.error}`);
+      try {
+        const res = await fetch(`${API_BASE}/save_questionaire`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            flow_id: flowId,
+            user_id,
+            fields,
+            skip: isSkipMode,
+          }),
+        });
+
+        const result = await res.json();
+        if (!res.ok) {
+          showPopup(`Failed to save questionaire: ${result.error}`);
+          return false;
+        }
+
+        return true;
+      } catch (err) {
+        console.error(err);
+        showPopup("Failed to save questionaire.");
         return false;
       }
+    };
 
-      return true;
-    } catch (err) {
-      console.error(err);
-      showPopup("Failed to save questionaire.");
-      return false;
-    }
-  };
-
-  setSaveFunction(() => saveQuestionaire);
-}, [answers, questionaire, required, setSaveFunction]);
+    setSaveFunction(() => saveQuestionaire);
+  }, [answers, questionaire, required, setSaveFunction]);
 
   const toggleGenderOption = (opt) => {
     setAnswers((prev) => ({
@@ -139,9 +141,15 @@ const Questionaire = ({ data, setData, setSaveFunction }) => {
   const handleNoClick = (field) => {
     setQuestionaire((p) => ({ ...p, [field]: false }));
     setRequired((p) => ({ ...p, [field]: false }));
+
     setAnswers((prev) => ({
       ...prev,
-      [field]: questionaireFields[field]?.multi ? [] : "",
+      [field]:
+        field === "Skin Type"
+          ? [] 
+          : questionaireFields[field]?.multi
+          ? []
+          : "",
     }));
   };
 
@@ -175,7 +183,9 @@ const Questionaire = ({ data, setData, setSaveFunction }) => {
                 <button
                   onClick={() => handleNoClick(field)}
                   className={`px-3 py-1 rounded ${
-                    questionaire[field] === false ? "bg-[#01bcd5] text-white" : "bg-gray-300"
+                    questionaire[field] === false
+                      ? "bg-[#01bcd5] text-white"
+                      : "bg-gray-300"
                   }`}
                 >
                   No
@@ -222,20 +232,21 @@ const Questionaire = ({ data, setData, setSaveFunction }) => {
                       </button>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      {answers["Skin Type"]?.map((type, index) => (
-                        <span
-                          key={index}
-                          className="px-3 py-1 bg-gray-200 rounded flex items-center gap-2"
-                        >
-                          {type}
-                          <button
-                            onClick={() => removeSkinType(index)}
-                            className="text-red-500 font-bold"
+                      {Array.isArray(answers["Skin Type"]) &&
+                        answers["Skin Type"].map((type, index) => (
+                          <span
+                            key={index}
+                            className="px-3 py-1 bg-gray-200 rounded flex items-center gap-2"
                           >
-                            ×
-                          </button>
-                        </span>
-                      ))}
+                            {type}
+                            <button
+                              onClick={() => removeSkinType(index)}
+                              className="text-red-500 font-bold"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
                     </div>
                   </>
                 ) : (

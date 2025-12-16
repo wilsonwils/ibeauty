@@ -21,11 +21,11 @@ const ContactPage = ({ data, setData, setSaveFunction }) => {
     setTimeout(() => setPopupMsg(""), 3000);
   };
 
-  // Update parent (UNCHANGED)
+  
   useEffect(() => {
   const saveContactPage = async (flowId) => {
     const user_id = localStorage.getItem("userId");
-    const token = localStorage.getItem("AUTH_TOKEN"); // ✅ get JWT token
+    const token = localStorage.getItem("AUTH_TOKEN"); 
     if (!flowId || !user_id || !token) return false;
 
     // If none selected → show error (UNCHANGED)
@@ -39,10 +39,10 @@ const ContactPage = ({ data, setData, setSaveFunction }) => {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}` // ✅ send token
+          "Authorization": `Bearer ${token}` 
         },
         body: JSON.stringify({
-          flow_id: flowId, // from parent
+          flow_id: flowId, 
           user_id,
           ...selected,
         }),

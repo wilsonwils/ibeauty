@@ -157,34 +157,62 @@ def save_questionaire():
 
     try:
         question_ids = []
+        display_order = 1  # start numbering questions
 
         for label, config in fields.items():
             key = config["yes_no"]
             input_type = config.get("type", "yes_no")
-            options = config.get("options")
+            selected_options = config.get("value")  # store selected options here
+            required = config.get("required", False)
 
+            # Check if a row already exists
             cur.execute("""
-                INSERT INTO questions
-                (flow_id, organization_id, user_id, label, key, input_type, required, options)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING id
-            """, (
-                flow_id,
-                organization_id,
-                user_id,
-                label,
-                key,
-                input_type,
-                config.get("required", False),
-                json.dumps(options) if options else None
-            ))
+                SELECT id FROM questions
+                WHERE flow_id=%s AND user_id=%s AND label=%s
+            """, (flow_id, user_id, label))
+            existing = cur.fetchone()
 
-            question_ids.append(cur.fetchone()[0])
+            if existing:
+                # Update existing row
+                cur.execute("""
+                    UPDATE questions
+                    SET key=%s, input_type=%s, options=%s, required=%s, display_order=%s
+                    WHERE id=%s
+                """, (
+                    key,
+                    input_type,
+                    json.dumps(selected_options) if selected_options is not None else None,
+                    required,
+                    display_order,
+                    existing[0]
+                ))
+                question_ids.append(existing[0])
+            else:
+                # Insert new row
+                cur.execute("""
+                    INSERT INTO questions
+                    (flow_id, organization_id, user_id, label, key, input_type, required, options, display_order)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id
+                """, (
+                    flow_id,
+                    organization_id,
+                    user_id,
+                    label,
+                    key,
+                    input_type,
+                    required,
+                    json.dumps(selected_options) if selected_options is not None else None,
+                    display_order
+                ))
+                question_ids.append(cur.fetchone()[0])
+
+            display_order += 1  # increment question number
 
         conn.commit()
 
         return jsonify({
-            "message": "Questionnaire saved",
+            "message": "Questionnaire saved/updated",
             "question_ids": question_ids
         }), 200
 
@@ -217,21 +245,54 @@ def save_capture_page():
     cur = conn.cursor()
 
     try:
+        # 1️⃣ Check if capture already exists for this flow + user
         cur.execute("""
-            INSERT INTO capture
-            (flow_id, organization_id, user_id, text_area, created_at)
-            VALUES (%s, %s, %s, %s, %s)
-            RETURNING id
-        """, (flow_id, organization_id, user_id, text_area, datetime.utcnow()))
+            SELECT id FROM capture
+            WHERE flow_id = %s AND user_id = %s
+        """, (flow_id, user_id))
+        existing = cur.fetchone()
 
-        capture_id = cur.fetchone()[0]
+        if existing:
+            # 2️⃣ Update existing record
+            capture_id = existing[0]
+            cur.execute("""
+                UPDATE capture
+                SET text_area = %s
+                WHERE id = %s
+            """, (text_area, capture_id))
+        else:
+            # 3️⃣ Insert new record
+            cur.execute("""
+                INSERT INTO capture
+                (flow_id, organization_id, user_id, text_area, created_at)
+                VALUES (%s, %s, %s, %s, %s)
+                RETURNING id
+            """, (
+                flow_id,
+                organization_id,
+                user_id,
+                text_area,
+                datetime.utcnow()
+            ))
+            capture_id = cur.fetchone()[0]
+
         conn.commit()
 
-        return jsonify({"id": capture_id, "message": "Capture saved"}), 201
+        return jsonify({
+            "id": capture_id,
+            "message": "Capture saved"
+        }), 200
+
+    except Exception as e:
+        conn.rollback()
+        print("SAVE CAPTURE ERROR:", e)
+        return jsonify({"error": "Server error"}), 500
 
     finally:
         cur.close()
         conn.close()
+
+
 
 
 @flow_bp.post("/save_contact_page")
@@ -335,26 +396,28 @@ def save_segmentation():
 
     data = request.get_json() or {}
     flow_id = data.get("flow_id")
-    segmentation_fields = data.get("segmentation_fields")
+    segmentation_fields = data.get("segmentation_fields") or []
 
     if not flow_id:
         return jsonify({"error": "flow_id is required"}), 400
 
-    if not segmentation_fields or not isinstance(segmentation_fields, list):
-        return jsonify({"error": "Select at least one segmentation option"}), 400
+    # Ensure fields is always a list
+    if segmentation_fields and not isinstance(segmentation_fields, list):
+        return jsonify({"error": "Invalid segmentation data"}), 400
 
     conn = get_connection()
     cur = conn.cursor()
 
     try:
+        # Validate flow
         cur.execute("""
             SELECT id FROM flows
             WHERE id=%s AND organization_id=%s
         """, (flow_id, organization_id))
-
         if not cur.fetchone():
             return jsonify({"error": "Invalid flow or unauthorized"}), 403
 
+        # Check existing record
         cur.execute("""
             SELECT id FROM segmentation_fields
             WHERE flow_id=%s AND user_id=%s
@@ -395,3 +458,250 @@ def save_segmentation():
         cur.close()
         conn.close()
 
+@flow_bp.post("/save_skingoal")
+def save_skingoal():
+    auth = request.headers.get("Authorization")
+    if not auth:
+        return jsonify({"error": "Token required"}), 401
+
+    token = auth.replace("Bearer ", "").strip()
+    payload = decode_token(token)
+    if not payload:
+        return jsonify({"error": "Invalid or expired token"}), 401
+
+    user_id = payload["user_id"]
+    organization_id = payload["organization_id"]
+
+    data = request.get_json() or {}
+    flow_id = data.get("flow_id")
+    skingoal_fields = data.get("skingoal_fields") or []
+
+    if not flow_id:
+        return jsonify({"error": "flow_id is required"}), 400
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    try:
+        # Validate flow
+        cur.execute("""
+            SELECT id FROM flows
+            WHERE id=%s AND organization_id=%s
+        """, (flow_id, organization_id))
+        if not cur.fetchone():
+            return jsonify({"error": "Invalid flow or unauthorized"}), 403
+
+        # Check existing record
+        cur.execute("""
+            SELECT id FROM skin_goals
+            WHERE flow_id=%s AND user_id=%s
+        """, (flow_id, user_id))
+        existing = cur.fetchone()
+
+        skingoal_json = json.dumps(skingoal_fields)
+
+        if existing:
+            skingoal_id = existing[0]
+            cur.execute("""
+                UPDATE skin_goals
+                SET selected_fields=%s, description=NULL
+                WHERE id=%s
+            """, (skingoal_json, skingoal_id))
+        else:
+            cur.execute("""
+                INSERT INTO skin_goals
+                (flow_id, user_id, organization_id, description, selected_fields)
+                VALUES (%s, %s, %s, NULL, %s)
+                RETURNING id
+            """, (flow_id, user_id, organization_id, skingoal_json))
+            skingoal_id = cur.fetchone()[0]
+
+        conn.commit()
+
+        return jsonify({
+            "message": "Skin Goal saved successfully",
+            "id": skingoal_id,
+            "flow_id": flow_id,
+            "organization_id": organization_id
+        }), 201
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+@flow_bp.post("/save_summary")
+def save_summary():
+    auth = request.headers.get("Authorization")
+    if not auth:
+        return jsonify({"error": "Token required"}), 401
+
+    token = auth.replace("Bearer ", "").strip()
+    payload = decode_token(token)
+    if not payload:
+        return jsonify({"error": "Invalid or expired token"}), 401
+
+    user_id = payload["user_id"]
+    organization_id = payload["organization_id"]
+
+    data = request.get_json() or {}
+    flow_id = data.get("flow_id")
+    summary_fields = data.get("summary_fields") or {}
+
+    if not flow_id:
+        return jsonify({"error": "flow_id is required"}), 400
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    try:
+        # Validate flow
+        cur.execute("""
+            SELECT id FROM flows
+            WHERE id=%s AND organization_id=%s
+        """, (flow_id, organization_id))
+        if not cur.fetchone():
+            return jsonify({"error": "Invalid flow or unauthorized"}), 403
+
+        #Convert to JSONB format
+        field_name = {}
+        for key, value in summary_fields.items():
+            db_key = (
+                key.lower()
+                .replace(" ", "_")
+                .replace("-", "_")
+            )
+            field_name[db_key] = "yes" if value else "no"
+
+        field_name_json = json.dumps(field_name)
+
+        # 🔎 Check existing record
+        cur.execute("""
+            SELECT id FROM organization_summary
+            WHERE flow_id=%s AND user_id=%s
+        """, (flow_id, user_id))
+        existing = cur.fetchone()
+
+        if existing:
+            summary_id = existing[0]
+            cur.execute("""
+                UPDATE organization_summary
+                SET field_name=%s
+                WHERE id=%s
+            """, (field_name_json, summary_id))
+        else:
+            cur.execute("""
+                INSERT INTO organization_summary
+                (user_id, organization_id, flow_id, field_name)
+                VALUES (%s, %s, %s, %s)
+                RETURNING id
+            """, (
+                user_id,
+                organization_id,
+                flow_id,
+                field_name_json
+            ))
+            summary_id = cur.fetchone()[0]
+
+        conn.commit()
+
+        return jsonify({
+            "message": "Summary saved successfully",
+            "id": summary_id,
+            "flow_id": flow_id,
+            "organization_id": organization_id
+        }), 201
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+@flow_bp.post("/save_suggestproduct")
+def save_suggestproduct():
+    auth = request.headers.get("Authorization")
+    if not auth:
+        return jsonify({"error": "Token required"}), 401
+
+    token = auth.replace("Bearer ", "").strip()
+    payload = decode_token(token)
+    if not payload:
+        return jsonify({"error": "Invalid or expired token"}), 401
+
+    user_id = payload["user_id"]
+    organization_id = payload["organization_id"]
+
+    data = request.get_json() or {}
+    flow_id = data.get("flow_id")
+    suggest_fields = data.get("suggest_fields") or {}
+
+    if not flow_id:
+        return jsonify({"error": "flow_id is required"}), 400
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    try:
+        # Validate flow
+        cur.execute("""
+            SELECT id FROM flows
+            WHERE id=%s AND organization_id=%s
+        """, (flow_id, organization_id))
+        if not cur.fetchone():
+            return jsonify({"error": "Invalid flow or unauthorized"}), 403
+
+        # Convert to JSONB format
+        field_data = {}
+        for key, value in suggest_fields.items():
+            db_key = key.lower().replace(" ", "_").replace("-", "_")
+            field_data[db_key] = "yes" if value else "no"
+
+        field_json = json.dumps(field_data)
+
+        # Check existing record
+        cur.execute("""
+            SELECT id FROM product_suggest
+            WHERE flow_id=%s AND user_id=%s
+        """, (flow_id, user_id))
+        existing = cur.fetchone()
+
+        if existing:
+            suggest_id = existing[0]
+            cur.execute("""
+                UPDATE product_suggest
+                SET field=%s
+                WHERE id=%s
+            """, (field_json, suggest_id))
+        else:
+            cur.execute("""
+                INSERT INTO product_suggest
+                (user_id, organization_id, flow_id, field)
+                VALUES (%s, %s, %s, %s)
+                RETURNING id
+            """, (
+                user_id,
+                organization_id,
+                flow_id,
+                field_json
+            ))
+            suggest_id = cur.fetchone()[0]
+
+        conn.commit()
+
+        return jsonify({
+            "message": "Product suggestion saved successfully",
+            "id": suggest_id,
+            "flow_id": flow_id,
+            "organization_id": organization_id
+        }), 201
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cur.close()
+        conn.close()

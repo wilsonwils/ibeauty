@@ -21,12 +21,12 @@ const Dashboard = () => {
   };
 
   // -----------------------------
-  // 🔥 Fetch Modules From API
+  // Fetch Modules From API
   // -----------------------------
   const fetchModules = async () => {
     try {
       const result = await getModules();
-      setModules(result.data || result); // Adjust based on your backend response
+      setModules(result.data || result); 
     } catch (error) {
       console.error("Module fetch error:", error);
     }

@@ -1,4 +1,3 @@
-// Setflow.jsx
 import React, { useState } from "react";
 import { API_BASE } from "../utils/api";
 import LandingPage from "./LandingPage";
@@ -6,6 +5,9 @@ import Questionaire from "./Questionaire";
 import CapturePage from "./CapturePage";
 import ContactPage from "./ContactPage";
 import Segmentation from "./Segmentation";
+import SkingoalPage from "./SkingoalPage";
+import SummaryPage from "./SummaryPage";
+import SuggestProduct from "./SuggestProduct";
 
 const Setflow = () => {
   const steps = [
@@ -15,8 +17,9 @@ const Setflow = () => {
     "Contact",
     "Segmentation",
     "Skin Goal",
-    "Summary & Routine",
-    "Suggest Products",
+    "Summary",
+    "Routine",
+    "Suggest Product",
   ];
 
   const [activeIndex, setActiveIndex] = useState(0);
@@ -26,12 +29,19 @@ const Setflow = () => {
     JSON.parse(localStorage.getItem("flow_ids")) || {}
   );
 
+  const [skippedSteps, setSkippedSteps] = useState(
+    JSON.parse(localStorage.getItem("skipped_steps")) || {}
+  );
+
   // -------------------- STEP DATA --------------------
   const [landingData, setLandingData] = useState({});
   const [questionData, setQuestionData] = useState({});
   const [captureData, setCaptureData] = useState({});
   const [contactData, setContactData] = useState({});
   const [segmentationData, setSegmentationData] = useState({});
+  const [skingoalData, setSkingoalData] = useState({});
+  const [summaryData, setSummaryData] = useState({});
+  const [suggestData, setSuggestData] = useState({});
 
   // -------------------- LAST SAVED --------------------
   const [lastSavedLanding, setLastSavedLanding] = useState({});
@@ -39,6 +49,9 @@ const Setflow = () => {
   const [lastSavedCapture, setLastSavedCapture] = useState({});
   const [lastSavedContact, setLastSavedContact] = useState({});
   const [lastSavedSegmentation, setLastSavedSegmentation] = useState({});
+  const [lastSavedSkingoal, setLastSavedSkingoal] = useState({});
+  const [lastSavedSummary, setLastSavedSummary] = useState({});
+  const [lastSavedSuggest, setLastSavedSuggest] = useState({});
 
   const [currentSaveFunction, setCurrentSaveFunction] = useState(null);
 
@@ -107,10 +120,7 @@ const Setflow = () => {
     const stepName = steps[activeIndex];
 
     if (stepName === "Landing Page") {
-      if (
-        !landingData.uploadedThumbnailUrl &&
-        !landingData.selectedPosition
-      ) {
+      if (!landingData.uploadedThumbnailUrl && !landingData.selectedPosition) {
         alert("Upload thumbnail OR select CTA position.");
         return false;
       }
@@ -127,36 +137,67 @@ const Setflow = () => {
     if (!valid) return;
 
     let shouldSave = false;
-
     if (stepName === "Landing Page")
       shouldSave = isDataChanged(lastSavedLanding, landingData);
-
     if (stepName === "Questionaire")
       shouldSave = isDataChanged(lastSavedQuestion, questionData);
-
     if (stepName === "Capture")
       shouldSave = isDataChanged(lastSavedCapture, captureData);
-
     if (stepName === "Contact")
       shouldSave = isDataChanged(lastSavedContact, contactData);
+    if (stepName === "Segmentation") shouldSave = true;
+    if (stepName === "Skin Goal") shouldSave = true;
+    if (stepName === "Summary")
+      shouldSave = isDataChanged(lastSavedSummary, summaryData);
+    if (stepName === "Suggest Product")
+      shouldSave = isDataChanged(lastSavedSuggest, suggestData);
 
-    // ✅ SEGMENTATION MUST ALWAYS SAVE
-    if (stepName === "Segmentation")
-      shouldSave = true;
+    let saved = true;
+    if (shouldSave) {
+      saved = await saveStep(false);
 
-    if (shouldSave) await saveStep(false);
+      // Remove skipped label if saved
+      if (skippedSteps[stepName]) {
+        const updatedSkipped = { ...skippedSteps };
+        delete updatedSkipped[stepName];
+        setSkippedSteps(updatedSkipped);
+        localStorage.setItem("skipped_steps", JSON.stringify(updatedSkipped));
+      }
+    }
+
+    if (!saved) return;
 
     // update last saved
-    if (stepName === "Landing Page") setLastSavedLanding(landingData);
-    if (stepName === "Questionaire") setLastSavedQuestion(questionData);
-    if (stepName === "Capture") setLastSavedCapture(captureData);
-    if (stepName === "Contact") setLastSavedContact(contactData);
-    if (stepName === "Segmentation")
-      setLastSavedSegmentation(segmentationData);
-
-    if (activeIndex < steps.length - 1) {
-      setActiveIndex(activeIndex + 1);
+    switch (stepName) {
+      case "Landing Page":
+        setLastSavedLanding(landingData);
+        break;
+      case "Questionaire":
+        setLastSavedQuestion(questionData);
+        break;
+      case "Capture":
+        setLastSavedCapture(captureData);
+        break;
+      case "Contact":
+        setLastSavedContact(contactData);
+        break;
+      case "Segmentation":
+        setLastSavedSegmentation(segmentationData);
+        break;
+      case "Skin Goal":
+        setLastSavedSkingoal(skingoalData);
+        break;
+      case "Summary":
+        setLastSavedSummary(summaryData);
+        break;
+      case "Suggest Product":
+        setLastSavedSuggest(suggestData);
+        break;
+      default:
+        break;
     }
+
+    if (activeIndex < steps.length - 1) setActiveIndex(activeIndex + 1);
   };
 
   // ==================================================
@@ -165,25 +206,51 @@ const Setflow = () => {
   const goSkip = async () => {
     const stepName = steps[activeIndex];
 
-    let isAlreadySaved = false;
+    // Always save as skipped
+    await saveStep(true);
 
-    if (stepName === "Landing Page")
-      isAlreadySaved = Object.keys(lastSavedLanding).length > 0;
+    // Mark step as skipped
+    const updatedSkipped = { ...skippedSteps, [stepName]: true };
+    setSkippedSteps(updatedSkipped);
+    localStorage.setItem("skipped_steps", JSON.stringify(updatedSkipped));
 
-    if (stepName === "Questionaire")
-      isAlreadySaved = Object.keys(lastSavedQuestion).length > 0;
-
-    if (stepName === "Capture")
-      isAlreadySaved = Object.keys(lastSavedCapture).length > 0;
-
-    if (stepName === "Contact")
-      isAlreadySaved = Object.keys(lastSavedContact).length > 0;
-
-    // ✅ segmentation always saves on skip
-    if (stepName === "Segmentation")
-      isAlreadySaved = false;
-
-    if (!isAlreadySaved) await saveStep(true);
+    // Reset data
+    switch (stepName) {
+      case "Landing Page":
+        setLastSavedLanding({});
+        setLandingData({});
+        break;
+      case "Questionaire":
+        setLastSavedQuestion({});
+        setQuestionData({});
+        break;
+      case "Capture":
+        setLastSavedCapture({});
+        setCaptureData({});
+        break;
+      case "Contact":
+        setLastSavedContact({});
+        setContactData({});
+        break;
+      case "Segmentation":
+        setLastSavedSegmentation({});
+        setSegmentationData({});
+        break;
+      case "Skin Goal":
+        setLastSavedSkingoal({});
+        setSkingoalData({});
+        break;
+      case "Summary":
+        setLastSavedSummary({});
+        setSummaryData({});
+        break;
+      case "Suggest Product":
+        setLastSavedSuggest({});
+        setSuggestData({});
+        break;
+      default:
+        break;
+    }
 
     if (activeIndex < steps.length - 1) {
       setActiveIndex(activeIndex + 1);
@@ -204,37 +271,53 @@ const Setflow = () => {
   const contents = [
     <LandingPage
       key="landing"
-      data={landingData}
+      data={Object.keys(landingData).length ? landingData : lastSavedLanding}
       setData={setLandingData}
       setSaveFunction={setCurrentSaveFunction}
     />,
     <Questionaire
       key="questionaire"
-      data={questionData}
+      data={Object.keys(questionData).length ? questionData : lastSavedQuestion}
       setData={setQuestionData}
       setSaveFunction={setCurrentSaveFunction}
     />,
     <CapturePage
       key="capture"
-      data={captureData}
+      data={Object.keys(captureData).length ? captureData : lastSavedCapture}
       setData={setCaptureData}
       setSaveFunction={setCurrentSaveFunction}
     />,
     <ContactPage
       key="contact"
-      data={contactData}
+      data={Object.keys(contactData).length ? contactData : lastSavedContact}
       setData={setContactData}
       setSaveFunction={setCurrentSaveFunction}
     />,
     <Segmentation
       key="segmentation"
-      data={segmentationData}
+      data={Object.keys(segmentationData).length ? segmentationData : lastSavedSegmentation}
       setData={setSegmentationData}
       setSaveFunction={setCurrentSaveFunction}
     />,
-    <div key="skin_goal">Content for Skin Goal</div>,
-    <div key="summary">Content for Summary & Routine</div>,
-    <div key="suggest_products">Content for Suggest Products</div>,
+    <SkingoalPage
+      key="skingoal"
+      data={Object.keys(skingoalData).length ? skingoalData : lastSavedSkingoal}
+      setData={setSkingoalData}
+      setSaveFunction={setCurrentSaveFunction}
+    />,
+    <SummaryPage
+      key="summary"
+      data={Object.keys(summaryData).length ? summaryData : lastSavedSummary}
+      setData={setSummaryData}
+      setSaveFunction={setCurrentSaveFunction}
+    />,
+    <div key="routine">Content for Summary & Routine</div>,
+    <SuggestProduct
+      key="suggest"
+      data={Object.keys(suggestData).length ? suggestData : lastSavedSuggest}
+      setData={setSuggestData}
+      setSaveFunction={setCurrentSaveFunction}
+    />
   ];
 
   // ==================================================
@@ -242,6 +325,7 @@ const Setflow = () => {
   // ==================================================
   return (
     <div className="p-6">
+      {/* Step Buttons */}
       <div className="flex items-center mb-6">
         {steps.map((step, index) => (
           <React.Fragment key={index}>
@@ -254,16 +338,23 @@ const Setflow = () => {
             >
               {step}
             </button>
-            {index < steps.length - 1 && (
-              <span className="mx-2 font-bold">→</span>
-            )}
+            {index < steps.length - 1 && <span className="mx-2 font-bold">→</span>}
           </React.Fragment>
         ))}
       </div>
 
-      <div className="p-6 border rounded bg-gray-50 min-h-[150px]">
+      {/* Step Content */}
+      <div className="relative p-6 border rounded bg-gray-50 min-h-[150px]">
+        {/* Skipped Label */}
+        {skippedSteps[steps[activeIndex]] && (
+          <span className="absolute top-0 right-0 bg-red-500 text-white px-2 py-1 rounded text-xs font-bold">
+            Skipped
+          </span>
+        )}
+
         {contents[activeIndex]}
 
+        {/* Navigation Buttons */}
         <div className="flex justify-end gap-3 mt-6">
           {activeIndex > 0 && (
             <button
@@ -285,9 +376,7 @@ const Setflow = () => {
 
           <button
             onClick={
-              activeIndex === steps.length - 1
-                ? handleFinalSave
-                : handleSaveNext
+              activeIndex === steps.length - 1 ? handleFinalSave : handleSaveNext
             }
             className="px-4 py-2 bg-[#00bcd4] text-white rounded"
           >

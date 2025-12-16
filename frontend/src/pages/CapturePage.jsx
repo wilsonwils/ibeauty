@@ -4,7 +4,7 @@ import { API_BASE } from "../utils/api";
 const CapturePage = ({ data, setData, setSaveFunction }) => {
   const [description, setDescription] = useState(data.description || "");
 
-  // Persist to parent (UNCHANGED)
+ 
   useEffect(() => {
     setData((prev) => ({ ...prev, description }));
   }, [description, setData]);
@@ -21,13 +21,13 @@ const CapturePage = ({ data, setData, setSaveFunction }) => {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}` // ✅ send token
+          "Authorization": `Bearer ${token}` 
         },
         body: JSON.stringify({
-          flow_id: flowId,
-          user_id: userId,
-          text_area: description,
+       flow_id: flowId,
+       text_area: description,
         }),
+
       });
 
       await res.json();

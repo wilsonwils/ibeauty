@@ -5,7 +5,7 @@ import { api, API_BASE } from "../utils/api";
 const Addproduct = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const product = location.state?.product; // product data if editing
+  const product = location.state?.product;
 
   const [productName, setProductName] = useState("");
   const [sku, setSku] = useState("");
@@ -67,7 +67,7 @@ const Addproduct = () => {
   e.preventDefault();
 
   try {
-    const imageUrl = await uploadImage(); // <-- define it first
+    const imageUrl = await uploadImage();
 
     const body = product
       ? {
@@ -154,7 +154,7 @@ const Addproduct = () => {
     value={description}
     onChange={(e) => setDescription(e.target.value)}
     className="w-full border p-2 rounded"
-    rows={4} // you can adjust the number of visible rows
+    rows={4} 
     placeholder="Enter description here"
   />
 </div>

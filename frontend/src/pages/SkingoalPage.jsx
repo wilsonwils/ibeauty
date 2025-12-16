@@ -1,25 +1,23 @@
 import React, { useState, useEffect } from "react";
 import { API_BASE } from "../utils/api";
 
-const Segmentation = ({ data, setData, setSaveFunction }) => {
+const SkingoalPage = ({ data, setData, setSaveFunction }) => {
   const conditions = [
-    "Oiliness",
-    "Dark Circles",
-    "Uneven Skin Tone",
-    "Dark Spots",
-    "Oxygen",
-    "Dullness",
-    "Pigmentation",
-    "Hydration",
-    "Eye Wrinkles",
-    "Skin Firmness",
-    "Wrinkles",
-    "Smoothness",
-    "Texture",
-    "Acne",
+    "Clearer, Balanced Skin",
+    "Refined-looking pores",
+    "Even-Toned complexion",
+    "Brighten Skin",
+    "Even Pigmentation",
+    "Improve Hydration",
+    "Smooth Texture",
+    "Radiant Glow",
+    "Youthful-looking skin",
+    "Brighten under-eyes",
+    "Improve Firmness",
+    "Even Skin tone",
   ];
 
-
+  
   const [selected, setSelected] = useState(() =>
     conditions.reduce((acc, c) => {
       acc[c] = data?.[c] || false;
@@ -31,23 +29,24 @@ const Segmentation = ({ data, setData, setSaveFunction }) => {
     setSelected((prev) => ({ ...prev, [field]: !prev[field] }));
   };
 
+  
   useEffect(() => {
-    const saveSegmentation = async (flowId) => {
+    const saveSkingoal = async (flowId) => {
       const token = localStorage.getItem("AUTH_TOKEN");
       if (!flowId || !token) return false;
 
-     
+    
       const selectedFields = Object.keys(selected).filter(
         (k) => selected[k]
       );
 
       if (!selectedFields.length) {
-        // alert("Select at least one segmentation option");
+        // alert("Select at least one skingoal option");
         return false;
       }
 
       try {
-        const res = await fetch(`${API_BASE}/save_segmentation`, {
+        const res = await fetch(`${API_BASE}/save_skingoal`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -55,16 +54,17 @@ const Segmentation = ({ data, setData, setSaveFunction }) => {
           },
           body: JSON.stringify({
             flow_id: flowId,
-            segmentation_fields: selectedFields,
+            skingoal_fields: selectedFields, 
           }),
         });
 
         const result = await res.json();
         if (!res.ok) {
-          alert(result.error || "Failed to save segmentation");
+          alert(result.error || "Failed to save skingoal");
           return false;
         }
 
+        
         const mapped = selectedFields.reduce((acc, f) => {
           acc[f] = true;
           return acc;
@@ -72,23 +72,23 @@ const Segmentation = ({ data, setData, setSaveFunction }) => {
 
         setData({
           ...mapped,
-          segmentation_id: result.id,
+          skingoal_id: result.id,
         });
 
         return true;
       } catch (err) {
         console.error(err);
-        alert("Failed to save segmentation");
+        alert("Failed to save skingoal");
         return false;
       }
     };
 
-    setSaveFunction(() => saveSegmentation);
+    setSaveFunction(() => saveSkingoal);
   }, [selected, setSaveFunction, setData]);
 
   return (
     <div className="p-4 border rounded mt-4">
-      <h2 className="font-bold mb-4 text-lg">Segmentation</h2>
+      <h2 className="font-bold mb-4 text-lg">Skin Goal</h2>
 
       <div className="grid grid-cols-4 gap-4 text-sm font-semibold">
         {conditions.map((cond) => (
@@ -107,4 +107,4 @@ const Segmentation = ({ data, setData, setSaveFunction }) => {
   );
 };
 
-export default Segmentation;
+export default SkingoalPage;

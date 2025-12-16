@@ -10,7 +10,7 @@ const LandingPage = ({ data, setData, setSaveFunction }) => {
   );
   const [isUploading, setIsUploading] = useState(false);
 
-  // Persist changes to parent (UNCHANGED)
+
   useEffect(() => {
     setData((prev) => ({
       ...prev,
