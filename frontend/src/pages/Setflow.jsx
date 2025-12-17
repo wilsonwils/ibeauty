@@ -25,23 +25,71 @@ const Setflow = () => {
   const [activeIndex, setActiveIndex] = useState(0);
   const [isCompleted, setIsCompleted] = useState(false);
 
+  // -------------------- USER-SPECIFIC LOCALSTORAGE --------------------
+  const getUserKey = (key) => {
+    const userId = localStorage.getItem("userId");
+    return `${key}_${userId || "guest"}`;
+  };
+
   const [flowIds, setFlowIds] = useState(
-    JSON.parse(localStorage.getItem("flow_ids")) || {}
+    JSON.parse(localStorage.getItem(getUserKey("flow_ids"))) || {}
   );
 
   const [skippedSteps, setSkippedSteps] = useState(
-    JSON.parse(localStorage.getItem("skipped_steps")) || {}
+    JSON.parse(localStorage.getItem(getUserKey("skipped_steps"))) || {}
   );
 
   // -------------------- STEP DATA --------------------
-  const [landingData, setLandingData] = useState({});
-  const [questionData, setQuestionData] = useState({});
-  const [captureData, setCaptureData] = useState({});
-  const [contactData, setContactData] = useState({});
-  const [segmentationData, setSegmentationData] = useState({});
-  const [skingoalData, setSkingoalData] = useState({});
-  const [summaryData, setSummaryData] = useState({});
-  const [suggestData, setSuggestData] = useState({});
+  const [landingData, setLandingData] = useState(
+    JSON.parse(localStorage.getItem(getUserKey("landing_data"))) || {}
+  );
+  const [questionData, setQuestionData] = useState(
+    JSON.parse(localStorage.getItem(getUserKey("question_data"))) || {}
+  );
+  const [captureData, setCaptureData] = useState(
+    JSON.parse(localStorage.getItem(getUserKey("capture_data"))) || {}
+  );
+  const [contactData, setContactData] = useState(
+    JSON.parse(localStorage.getItem(getUserKey("contact_data"))) || {}
+  );
+  const [segmentationData, setSegmentationData] = useState(
+    JSON.parse(localStorage.getItem(getUserKey("segmentation_data"))) || {}
+  );
+  const [skingoalData, setSkingoalData] = useState(
+    JSON.parse(localStorage.getItem(getUserKey("skingoal_data"))) || {}
+  );
+  const [summaryData, setSummaryData] = useState(
+    JSON.parse(localStorage.getItem(getUserKey("summary_data"))) || {}
+  );
+  const [suggestData, setSuggestData] = useState(
+    JSON.parse(localStorage.getItem(getUserKey("suggest_data"))) || {}
+  );
+
+  // -------------------- PERSIST STEP DATA --------------------
+  React.useEffect(() => {
+    localStorage.setItem(getUserKey("landing_data"), JSON.stringify(landingData));
+  }, [landingData]);
+  React.useEffect(() => {
+    localStorage.setItem(getUserKey("question_data"), JSON.stringify(questionData));
+  }, [questionData]);
+  React.useEffect(() => {
+    localStorage.setItem(getUserKey("capture_data"), JSON.stringify(captureData));
+  }, [captureData]);
+  React.useEffect(() => {
+    localStorage.setItem(getUserKey("contact_data"), JSON.stringify(contactData));
+  }, [contactData]);
+  React.useEffect(() => {
+    localStorage.setItem(getUserKey("segmentation_data"), JSON.stringify(segmentationData));
+  }, [segmentationData]);
+  React.useEffect(() => {
+    localStorage.setItem(getUserKey("skingoal_data"), JSON.stringify(skingoalData));
+  }, [skingoalData]);
+  React.useEffect(() => {
+    localStorage.setItem(getUserKey("summary_data"), JSON.stringify(summaryData));
+  }, [summaryData]);
+  React.useEffect(() => {
+    localStorage.setItem(getUserKey("suggest_data"), JSON.stringify(suggestData));
+  }, [suggestData]);
 
   // -------------------- LAST SAVED --------------------
   const [lastSavedLanding, setLastSavedLanding] = useState({});
@@ -85,6 +133,7 @@ const Setflow = () => {
           description: skipValue
             ? `${stepName} skipped`
             : `${stepName} saved successfully`,
+          skip: skipValue,
         }),
       });
 
@@ -99,10 +148,23 @@ const Setflow = () => {
 
       const updated = { ...flowIds, [stepName]: newFlowId };
       setFlowIds(updated);
-      localStorage.setItem("flow_ids", JSON.stringify(updated));
+      localStorage.setItem(getUserKey("flow_ids"), JSON.stringify(updated));
 
+      // 🔥 PASS SKIP FLAG TO CHILD
       if (typeof currentSaveFunction === "function") {
-        return await currentSaveFunction(newFlowId);
+        let stepData = {};
+        if (stepName === "Landing Page") stepData = landingData;
+        if (stepName === "Questionaire") stepData = questionData;
+        if (stepName === "Capture") stepData = captureData;
+        if (stepName === "Contact") stepData = contactData;
+        if (stepName === "Segmentation") stepData = segmentationData;
+        if (stepName === "Skin Goal") stepData = skingoalData;
+        if (stepName === "Summary") stepData = summaryData;
+        if (stepName === "Suggest Product") stepData = suggestData;
+
+        return await currentSaveFunction(newFlowId, stepData, {
+          skip: skipValue,
+        });
       }
 
       return true;
@@ -156,18 +218,16 @@ const Setflow = () => {
     if (shouldSave) {
       saved = await saveStep(false);
 
-      // Remove skipped label if saved
       if (skippedSteps[stepName]) {
         const updatedSkipped = { ...skippedSteps };
         delete updatedSkipped[stepName];
         setSkippedSteps(updatedSkipped);
-        localStorage.setItem("skipped_steps", JSON.stringify(updatedSkipped));
+        localStorage.setItem(getUserKey("skipped_steps"), JSON.stringify(updatedSkipped));
       }
     }
 
     if (!saved) return;
 
-    // update last saved
     switch (stepName) {
       case "Landing Page":
         setLastSavedLanding(landingData);
@@ -197,7 +257,9 @@ const Setflow = () => {
         break;
     }
 
-    if (activeIndex < steps.length - 1) setActiveIndex(activeIndex + 1);
+    if (activeIndex < steps.length - 1) {
+      setActiveIndex(activeIndex + 1);
+    }
   };
 
   // ==================================================
@@ -205,16 +267,12 @@ const Setflow = () => {
   // ==================================================
   const goSkip = async () => {
     const stepName = steps[activeIndex];
-
-    // Always save as skipped
     await saveStep(true);
 
-    // Mark step as skipped
     const updatedSkipped = { ...skippedSteps, [stepName]: true };
     setSkippedSteps(updatedSkipped);
-    localStorage.setItem("skipped_steps", JSON.stringify(updatedSkipped));
+    localStorage.setItem(getUserKey("skipped_steps"), JSON.stringify(updatedSkipped));
 
-    // Reset data
     switch (stepName) {
       case "Landing Page":
         setLastSavedLanding({});
@@ -258,11 +316,14 @@ const Setflow = () => {
   };
 
   // ==================================================
-  // FINAL SAVE
+  // FINAL SAVE (UPDATED)
   // ==================================================
   const handleFinalSave = async () => {
-    await saveStep(false);
+    const saved = await saveStep(false);
+    if (!saved) return;
+
     setIsCompleted(true);
+    setActiveIndex(0); // ✅ GO TO LANDING PAGE
   };
 
   // ==================================================
@@ -295,7 +356,11 @@ const Setflow = () => {
     />,
     <Segmentation
       key="segmentation"
-      data={Object.keys(segmentationData).length ? segmentationData : lastSavedSegmentation}
+      data={
+        Object.keys(segmentationData).length
+          ? segmentationData
+          : lastSavedSegmentation
+      }
       setData={setSegmentationData}
       setSaveFunction={setCurrentSaveFunction}
     />,
@@ -317,7 +382,7 @@ const Setflow = () => {
       data={Object.keys(suggestData).length ? suggestData : lastSavedSuggest}
       setData={setSuggestData}
       setSaveFunction={setCurrentSaveFunction}
-    />
+    />,
   ];
 
   // ==================================================
@@ -325,7 +390,6 @@ const Setflow = () => {
   // ==================================================
   return (
     <div className="p-6">
-      {/* Step Buttons */}
       <div className="flex items-center mb-6">
         {steps.map((step, index) => (
           <React.Fragment key={index}>
@@ -333,19 +397,23 @@ const Setflow = () => {
               disabled={!isCompleted}
               onClick={() => isCompleted && setActiveIndex(index)}
               className={`flex-1 py-3 font-bold rounded
-                ${activeIndex === index ? "bg-[#00bcd4] text-white" : "bg-gray-200"}
+                ${
+                  activeIndex === index
+                    ? "bg-[#00bcd4] text-white"
+                    : "bg-gray-200"
+                }
                 ${!isCompleted ? "opacity-60 cursor-not-allowed" : ""}`}
             >
               {step}
             </button>
-            {index < steps.length - 1 && <span className="mx-2 font-bold">→</span>}
+            {index < steps.length - 1 && (
+              <span className="mx-2 font-bold">→</span>
+            )}
           </React.Fragment>
         ))}
       </div>
 
-      {/* Step Content */}
       <div className="relative p-6 border rounded bg-gray-50 min-h-[150px]">
-        {/* Skipped Label */}
         {skippedSteps[steps[activeIndex]] && (
           <span className="absolute top-0 right-0 bg-red-500 text-white px-2 py-1 rounded text-xs font-bold">
             Skipped
@@ -354,7 +422,6 @@ const Setflow = () => {
 
         {contents[activeIndex]}
 
-        {/* Navigation Buttons */}
         <div className="flex justify-end gap-3 mt-6">
           {activeIndex > 0 && (
             <button
@@ -376,7 +443,9 @@ const Setflow = () => {
 
           <button
             onClick={
-              activeIndex === steps.length - 1 ? handleFinalSave : handleSaveNext
+              activeIndex === steps.length - 1
+                ? handleFinalSave
+                : handleSaveNext
             }
             className="px-4 py-2 bg-[#00bcd4] text-white rounded"
           >

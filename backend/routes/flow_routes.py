@@ -148,6 +148,7 @@ def save_questionaire():
     data = request.get_json() or {}
     flow_id = data.get("flow_id")
     fields = data.get("fields")
+    skip = data.get("skip", False)  # check if skip mode is on
 
     if not flow_id or not fields:
         return jsonify({"error": "flow_id and fields required"}), 400
@@ -162,8 +163,13 @@ def save_questionaire():
         for label, config in fields.items():
             key = config["yes_no"]
             input_type = config.get("type", "yes_no")
-            selected_options = config.get("value")  # store selected options here
+            selected_options = config.get("value")
             required = config.get("required", False)
+
+            # If skip mode, clear any previously saved answer
+            if skip:
+                selected_options = [] if isinstance(selected_options, list) else None
+                key = "no"  # mark as skipped
 
             # Check if a row already exists
             cur.execute("""
@@ -213,12 +219,14 @@ def save_questionaire():
 
         return jsonify({
             "message": "Questionnaire saved/updated",
-            "question_ids": question_ids
+            "question_ids": question_ids,
+            "skip": skip
         }), 200
 
     finally:
         cur.close()
         conn.close()
+
 
 @flow_bp.post("/save_capture_page")
 def save_capture_page():
@@ -237,15 +245,19 @@ def save_capture_page():
     data = request.get_json() or {}
     flow_id = data.get("flow_id")
     text_area = data.get("text_area", "")
+    skip = data.get("skip", False)  # <-- skip flag
 
     if not flow_id:
         return jsonify({"error": "flow_id required"}), 400
+
+    if skip:
+        text_area = None  # empty on skip
 
     conn = get_connection()
     cur = conn.cursor()
 
     try:
-        # 1️⃣ Check if capture already exists for this flow + user
+        # Check if capture already exists
         cur.execute("""
             SELECT id FROM capture
             WHERE flow_id = %s AND user_id = %s
@@ -253,7 +265,6 @@ def save_capture_page():
         existing = cur.fetchone()
 
         if existing:
-            # 2️⃣ Update existing record
             capture_id = existing[0]
             cur.execute("""
                 UPDATE capture
@@ -261,7 +272,6 @@ def save_capture_page():
                 WHERE id = %s
             """, (text_area, capture_id))
         else:
-            # 3️⃣ Insert new record
             cur.execute("""
                 INSERT INTO capture
                 (flow_id, organization_id, user_id, text_area, created_at)
@@ -293,19 +303,13 @@ def save_capture_page():
         conn.close()
 
 
-
-
 @flow_bp.post("/save_contact_page")
 def save_contact_page():
-    #  Read token
     auth = request.headers.get("Authorization")
     if not auth:
         return jsonify({"error": "Token required"}), 401
 
-    #  Clean token
     token = auth.replace("Bearer ", "").strip()
-
-    #  Decode token
     payload = decode_token(token)
     if not payload:
         return jsonify({"error": "Invalid or expired token"}), 401
@@ -313,25 +317,28 @@ def save_contact_page():
     user_id = payload["user_id"]
     organization_id = payload["organization_id"]
 
-    #  Read body
     data = request.get_json() or {}
     flow_id = data.get("flow_id")
+    skip = data.get("skip") is True
 
     if not flow_id:
         return jsonify({"error": "flow_id is required"}), 400
 
-    #  Possible fields
     fields = ["name", "phone", "whatsapp", "email"]
-    selected_fields = [f for f in fields if data.get(f)]
 
-    if not selected_fields:
-        return jsonify({"error": "Select at least one option"}), 400
+    # ✅ IF SKIP → FORCE EMPTY
+    if skip:
+        selected_fields = []
+    else:
+        selected_fields = [f for f in fields if data.get(f)]
+
+        if not selected_fields:
+            return jsonify({"error": "Select at least one option"}), 400
 
     conn = get_connection()
     cur = conn.cursor()
 
     try:
-        #  Validate flow belongs to org
         cur.execute("""
             SELECT id FROM flows
             WHERE id=%s AND organization_id=%s
@@ -340,11 +347,11 @@ def save_contact_page():
         if not cur.fetchone():
             return jsonify({"error": "Invalid flow or unauthorized"}), 403
 
-        #  Check existing contact input
         cur.execute("""
             SELECT id FROM organization_contact_input
             WHERE flow_id=%s AND user_id=%s
         """, (flow_id, user_id))
+
         existing = cur.fetchone()
 
         if existing:
@@ -360,7 +367,12 @@ def save_contact_page():
                 (flow_id, user_id, organization_id, contact_information)
                 VALUES (%s, %s, %s, %s)
                 RETURNING id
-            """, (flow_id, user_id, organization_id, json.dumps(selected_fields)))
+            """, (
+                flow_id,
+                user_id,
+                organization_id,
+                json.dumps(selected_fields)
+            ))
             contact_id = cur.fetchone()[0]
 
         conn.commit()
@@ -369,7 +381,8 @@ def save_contact_page():
             "message": "Contact page saved successfully",
             "id": contact_id,
             "flow_id": flow_id,
-            "organization_id": organization_id
+            "organization_id": organization_id,
+            "skip": skip
         }), 201
 
     except Exception as e:
@@ -379,6 +392,7 @@ def save_contact_page():
     finally:
         cur.close()
         conn.close()
+
 
 @flow_bp.post("/save_segmentation")
 def save_segmentation():
@@ -396,34 +410,44 @@ def save_segmentation():
 
     data = request.get_json() or {}
     flow_id = data.get("flow_id")
-    segmentation_fields = data.get("segmentation_fields") or []
+    skip = data.get("skip") is True
 
     if not flow_id:
         return jsonify({"error": "flow_id is required"}), 400
 
-    # Ensure fields is always a list
-    if segmentation_fields and not isinstance(segmentation_fields, list):
-        return jsonify({"error": "Invalid segmentation data"}), 400
+    segmentation_fields = data.get("segmentation_fields")
+
+    # ✅ SKIP → FORCE EMPTY LIST
+    if skip:
+        segmentation_fields = []
+    else:
+        # Ensure valid list when not skipped
+        if segmentation_fields is None:
+            segmentation_fields = []
+
+        if not isinstance(segmentation_fields, list):
+            return jsonify({"error": "Invalid segmentation data"}), 400
 
     conn = get_connection()
     cur = conn.cursor()
 
     try:
-        # Validate flow
+        # Validate flow belongs to org
         cur.execute("""
             SELECT id FROM flows
             WHERE id=%s AND organization_id=%s
         """, (flow_id, organization_id))
+
         if not cur.fetchone():
             return jsonify({"error": "Invalid flow or unauthorized"}), 403
 
-        # Check existing record
+        # Check existing segmentation
         cur.execute("""
             SELECT id FROM segmentation_fields
             WHERE flow_id=%s AND user_id=%s
         """, (flow_id, user_id))
-        existing = cur.fetchone()
 
+        existing = cur.fetchone()
         segmentation_json = json.dumps(segmentation_fields)
 
         if existing:
@@ -439,7 +463,12 @@ def save_segmentation():
                 (flow_id, user_id, organization_id, segmentation_details)
                 VALUES (%s, %s, %s, %s)
                 RETURNING id
-            """, (flow_id, user_id, organization_id, segmentation_json))
+            """, (
+                flow_id,
+                user_id,
+                organization_id,
+                segmentation_json
+            ))
             segmentation_id = cur.fetchone()[0]
 
         conn.commit()
@@ -448,12 +477,14 @@ def save_segmentation():
             "message": "Segmentation saved successfully",
             "id": segmentation_id,
             "flow_id": flow_id,
-            "organization_id": organization_id
+            "organization_id": organization_id,
+            "skip": skip
         }), 201
 
     except Exception as e:
         conn.rollback()
         return jsonify({"error": str(e)}), 500
+
     finally:
         cur.close()
         conn.close()
@@ -474,10 +505,18 @@ def save_skingoal():
 
     data = request.get_json() or {}
     flow_id = data.get("flow_id")
-    skingoal_fields = data.get("skingoal_fields") or []
+    skingoal_fields = data.get("skingoal_fields")
+    skip = data.get("skip") is True
 
     if not flow_id:
         return jsonify({"error": "flow_id is required"}), 400
+
+    # ❌ Do NOT allow empty save unless skipped
+    if not skip and not skingoal_fields:
+        return jsonify({"error": "Select at least one skin goal"}), 400
+
+    # Normalize to list
+    skingoal_fields = skingoal_fields or []
 
     conn = get_connection()
     cur = conn.cursor()
@@ -504,7 +543,8 @@ def save_skingoal():
             skingoal_id = existing[0]
             cur.execute("""
                 UPDATE skin_goals
-                SET selected_fields=%s, description=NULL
+                SET selected_fields=%s,
+                    description=NULL
                 WHERE id=%s
             """, (skingoal_json, skingoal_id))
         else:
@@ -522,12 +562,14 @@ def save_skingoal():
             "message": "Skin Goal saved successfully",
             "id": skingoal_id,
             "flow_id": flow_id,
-            "organization_id": organization_id
+            "organization_id": organization_id,
+            "skip": skip
         }), 201
 
     except Exception as e:
         conn.rollback()
         return jsonify({"error": str(e)}), 500
+
     finally:
         cur.close()
         conn.close()
@@ -548,16 +590,22 @@ def save_summary():
 
     data = request.get_json() or {}
     flow_id = data.get("flow_id")
-    summary_fields = data.get("summary_fields") or {}
+    summary_fields = data.get("summary_fields")
+    skip = data.get("skip") is True
 
     if not flow_id:
         return jsonify({"error": "flow_id is required"}), 400
+
+    if not skip and not summary_fields:
+        return jsonify({"error": "Select at least one summary option"}), 400
+
+    summary_fields = summary_fields or {}
 
     conn = get_connection()
     cur = conn.cursor()
 
     try:
-        # Validate flow
+        # check if flow exists
         cur.execute("""
             SELECT id FROM flows
             WHERE id=%s AND organization_id=%s
@@ -565,19 +613,14 @@ def save_summary():
         if not cur.fetchone():
             return jsonify({"error": "Invalid flow or unauthorized"}), 403
 
-        #Convert to JSONB format
         field_name = {}
         for key, value in summary_fields.items():
-            db_key = (
-                key.lower()
-                .replace(" ", "_")
-                .replace("-", "_")
-            )
+            db_key = key.lower().replace(" ", "_").replace("-", "_")
             field_name[db_key] = "yes" if value else "no"
 
         field_name_json = json.dumps(field_name)
 
-        # 🔎 Check existing record
+        # update or insert without returning any summary_id
         cur.execute("""
             SELECT id FROM organization_summary
             WHERE flow_id=%s AND user_id=%s
@@ -585,44 +628,40 @@ def save_summary():
         existing = cur.fetchone()
 
         if existing:
-            summary_id = existing[0]
             cur.execute("""
                 UPDATE organization_summary
                 SET field_name=%s
                 WHERE id=%s
-            """, (field_name_json, summary_id))
+            """, (field_name_json, existing[0]))
         else:
             cur.execute("""
                 INSERT INTO organization_summary
                 (user_id, organization_id, flow_id, field_name)
                 VALUES (%s, %s, %s, %s)
-                RETURNING id
-            """, (
-                user_id,
-                organization_id,
-                flow_id,
-                field_name_json
-            ))
-            summary_id = cur.fetchone()[0]
+            """, (user_id, organization_id, flow_id, field_name_json))
 
         conn.commit()
 
         return jsonify({
             "message": "Summary saved successfully",
-            "id": summary_id,
             "flow_id": flow_id,
-            "organization_id": organization_id
+            "organization_id": organization_id,
+            "skip": skip
         }), 201
 
     except Exception as e:
         conn.rollback()
         return jsonify({"error": str(e)}), 500
+
     finally:
         cur.close()
         conn.close()
 
+
+
 @flow_bp.post("/save_suggestproduct")
 def save_suggestproduct():
+    # ---------- AUTH ----------
     auth = request.headers.get("Authorization")
     if not auth:
         return jsonify({"error": "Token required"}), 401
@@ -635,9 +674,11 @@ def save_suggestproduct():
     user_id = payload["user_id"]
     organization_id = payload["organization_id"]
 
+    # ---------- REQUEST DATA ----------
     data = request.get_json() or {}
     flow_id = data.get("flow_id")
     suggest_fields = data.get("suggest_fields") or {}
+    skip = data.get("skip", False)  # <-- check skip flag
 
     if not flow_id:
         return jsonify({"error": "flow_id is required"}), 400
@@ -646,36 +687,47 @@ def save_suggestproduct():
     cur = conn.cursor()
 
     try:
-        # Validate flow
+        # ---------- VALIDATE FLOW ----------
         cur.execute("""
-            SELECT id FROM flows
-            WHERE id=%s AND organization_id=%s
+            SELECT id
+            FROM flows
+            WHERE id = %s AND organization_id = %s
         """, (flow_id, organization_id))
+
         if not cur.fetchone():
             return jsonify({"error": "Invalid flow or unauthorized"}), 403
 
-        # Convert to JSONB format
+        # ---------- CONVERT TO JSONB ----------
         field_data = {}
         for key, value in suggest_fields.items():
             db_key = key.lower().replace(" ", "_").replace("-", "_")
-            field_data[db_key] = "yes" if value else "no"
+            if skip:
+                field_data[db_key] = None  # empty on skip
+            else:
+                field_data[db_key] = "yes" if value else "no"
 
         field_json = json.dumps(field_data)
 
-        # Check existing record
+        # ---------- CHECK EXISTING RECORD ----------
         cur.execute("""
-            SELECT id FROM product_suggest
-            WHERE flow_id=%s AND user_id=%s
-        """, (flow_id, user_id))
+            SELECT id
+            FROM product_suggest
+            WHERE user_id = %s
+              AND organization_id = %s
+              AND flow_id = %s
+        """, (user_id, organization_id, flow_id))
+
         existing = cur.fetchone()
 
+        # ---------- UPDATE OR INSERT ----------
         if existing:
             suggest_id = existing[0]
             cur.execute("""
                 UPDATE product_suggest
-                SET field=%s
-                WHERE id=%s
-            """, (field_json, suggest_id))
+                SET field = %s
+                WHERE id = %s
+                  AND organization_id = %s
+            """, (field_json, suggest_id, organization_id))
         else:
             cur.execute("""
                 INSERT INTO product_suggest
@@ -702,6 +754,7 @@ def save_suggestproduct():
     except Exception as e:
         conn.rollback()
         return jsonify({"error": str(e)}), 500
+
     finally:
         cur.close()
         conn.close()

@@ -1,60 +1,103 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { API_BASE } from "../utils/api";
 
 const SuggestProduct = ({ data, setData, setSaveFunction }) => {
   const questions = ["Product Suggestion"];
 
-  const [selected, setSelected] = useState(() =>
-    questions.reduce((acc, q) => {
-      acc[q] = data?.[q] ?? null;
-      return acc;
-    }, {})
-  );
+  const emptyState = questions.reduce((acc, q) => {
+    acc[q] = null;
+    return acc;
+  }, {});
+
+  const [selected, setSelected] = useState(() => ({
+    ...emptyState,
+    ...data,
+  }));
+
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const showError = (msg) => {
+    setErrorMsg(msg);
+    setTimeout(() => setErrorMsg(""), 3000);
+  };
 
   const toggle = (key, value) => {
     const updated = { ...selected, [key]: value };
     setSelected(updated);
-    setData(updated); 
+    setData(updated);
   };
 
-  const saveSuggest = async (flowId) => {
-    const token = localStorage.getItem("AUTH_TOKEN");
-    if (!flowId || !token) return false;
+  
+  const saveSuggest = useCallback(
+    async (flowId, _data, options = {}) => {
+      const token = localStorage.getItem("AUTH_TOKEN");
+      if (!flowId || !token) return false;
 
-    try {
-      const res = await fetch(`${API_BASE}/save_suggestproduct`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          flow_id: flowId,
-          suggest_fields: selected,
-        }),
-      });
+      const skip = options.skip === true;
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        alert(err.error || "Failed to save suggestion");
+      
+      if (!skip && Object.values(selected).some((v) => v === null)) {
+        showError("Please select an option before proceeding.");
         return false;
       }
 
-      return true;
-    } catch (err) {
-      console.error("Save error:", err);
-      return false;
-    }
-  };
+      const payload = skip
+        ? questions.reduce((acc, q) => ({ ...acc, [q]: null }), {})
+        : selected;
 
-  // register save function ONCE
+      try {
+        const res = await fetch(`${API_BASE}/save_suggestproduct`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            flow_id: flowId,
+            suggest_fields: payload,
+            skip,
+          }),
+        });
+
+        const result = await res.json();
+
+        if (!res.ok) {
+          showError(result.error || "Failed to save suggestion");
+          return false;
+        }
+
+        if (!skip) {
+          setData((prev) => ({
+            ...prev,
+            ...selected,
+          }));
+        }
+
+        return true;
+      } catch (err) {
+        console.error("Save error:", err);
+        showError("Failed to save suggestion");
+        return false;
+      }
+    },
+    [selected, setData, questions]
+  );
+
   useEffect(() => {
     setSaveFunction(() => saveSuggest);
-  }, []);
+  }, [saveSuggest, setSaveFunction]);
 
   return (
     <div>
       <h2 className="font-bold mb-4 text-lg">Product Suggestion</h2>
+
+      {/* Error message popup */}
+        {errorMsg && (
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded shadow-md z-10">
+          {errorMsg}
+        </div>
+      )}
+      
 
       {questions.map((key) => (
         <div
@@ -67,7 +110,7 @@ const SuggestProduct = ({ data, setData, setSaveFunction }) => {
             <button
               onClick={() => toggle(key, true)}
               className={`px-4 py-1 rounded ${
-                selected[key] ? "bg-[#01bcd5] text-white" : "bg-gray-300"
+                selected[key] === true ? "bg-[#01bcd5] text-white" : "bg-gray-300"
               }`}
             >
               Yes
@@ -76,9 +119,7 @@ const SuggestProduct = ({ data, setData, setSaveFunction }) => {
             <button
               onClick={() => toggle(key, false)}
               className={`px-4 py-1 rounded ${
-                selected[key] === false
-                  ? "bg-[#01bcd5] text-white"
-                  : "bg-gray-300"
+                selected[key] === false ? "bg-[#01bcd5] text-white" : "bg-gray-300"
               }`}
             >
               No
