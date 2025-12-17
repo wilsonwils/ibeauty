@@ -10,7 +10,7 @@ const ContactPage = ({ data, setData, setSaveFunction }) => {
     email: data?.email || false,
   });
 
-  const [popupMsg, setPopupMsg] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
 
   // Initialize local state when component mounts
   useEffect(() => {
@@ -31,10 +31,10 @@ const ContactPage = ({ data, setData, setSaveFunction }) => {
     }));
   }, [selected, setData]);
 
-  // Function to show popup messages
-  const showPopup = (msg) => {
-    setPopupMsg(msg);
-    setTimeout(() => setPopupMsg(""), 3000);
+  
+  const showError = (msg) => {
+    setErrorMsg(msg);
+    setTimeout(() => setErrorMsg(""), 3000);
   };
 
   // Save function
@@ -48,7 +48,7 @@ const ContactPage = ({ data, setData, setSaveFunction }) => {
 
      
       if (!skip && !selected.name && !selected.phone && !selected.whatsapp && !selected.email) {
-        showPopup("Select at least one option");
+        showError("Select at least one option");
         return false;
       }
 
@@ -85,7 +85,7 @@ const ContactPage = ({ data, setData, setSaveFunction }) => {
         const result = await res.json();
 
         if (!res.ok) {
-          showPopup(result.error || "Failed to save contact");
+          showError(result.error || "Failed to save contact");
           return false;
         }
 
@@ -99,7 +99,7 @@ const ContactPage = ({ data, setData, setSaveFunction }) => {
         return true;
       } catch (err) {
         console.error("Contact save error:", err);
-        showPopup("Failed to save contact.");
+        showError("Failed to save contact.");
         return false;
       }
     };
@@ -117,12 +117,15 @@ const ContactPage = ({ data, setData, setSaveFunction }) => {
 
   return (
     <div className="p-4 border rounded mt-4 relative">
-      {/* Popup message */}
-      {popupMsg && (
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded shadow-md z-10">
-          {popupMsg}
+      {/* Error message */}
+      {errorMsg && (
+        <div className="mt-4 flex justify-center">
+          <div className="inline-block rounded-md bg-red-100 border border-red-400 text-red-700 px-6 py-2 text-sm font-medium shadow-sm">
+            {errorMsg}
+          </div>
         </div>
       )}
+
 
       <div className="flex items-center gap-8 flex-wrap">
         <label className="flex items-center gap-2">

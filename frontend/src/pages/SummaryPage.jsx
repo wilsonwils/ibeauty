@@ -7,6 +7,7 @@ const SummaryPage = ({ data, setData, setSaveFunction }) => {
     "Download Pdf Template",
   ];
 
+ 
   const emptyState = questions.reduce((acc, q) => {
     acc[q] = null;
     return acc;
@@ -17,75 +18,92 @@ const SummaryPage = ({ data, setData, setSaveFunction }) => {
     ...data,
   }));
 
-  // ✅ toggle yes / no
+  const [errorMsg, setErrorMsg] = useState("");
+
+  // toggle Yes / No
   const toggle = (key, value) => {
-    setSelected((prev) => ({
+    setSelected(prev => ({
       ...prev,
       [key]: value,
     }));
 
-    // sync with Setflow data
-    setData((prev) => ({
+    setData(prev => ({
       ...prev,
       [key]: value,
     }));
+
+    setErrorMsg("");
   };
 
-  // ✅ SAVE FUNCTION (no useRef)
+  // save function (called by Setflow)
   const saveSummary = async (flowId, stepData, options = {}) => {
-  const token = localStorage.getItem("AUTH_TOKEN");
-  if (!flowId || !token) return false;
+    const token = localStorage.getItem("AUTH_TOKEN");
+    if (!flowId || !token) return false;
 
-  const skip = options.skip === true;
+    const skip = options.skip === true;
 
-  const payload = skip
-    ? {}
-    : Object.fromEntries(
-        Object.entries(stepData).filter(([_, value]) => value !== null)
-      );
-
-  try {
-    const res = await fetch(`${API_BASE}/save_summary`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        flow_id: flowId,
-        summary_fields: payload,
-        skip,
-      }),
-    });
-
-    const result = await res.json();
-
-    if (!res.ok) {
-      alert(result.error || "Save failed");
-      return false;
-    }
+  
+    const payload = skip
+      ? {}
+      : Object.fromEntries(
+          Object.entries(selected).filter(([_, v]) => v !== null)
+        );
 
     if (!skip) {
-      setData((prev) => ({
-        ...prev,
-        ...payload,
-      }));
+      if (Object.keys(payload).length !== questions.length) {
+        setErrorMsg("Please select Yes or No for all fields.");
+        return false;
+      }
     }
 
-    return true;
-  } catch (err) {
-    console.error(err);
-    return false;
-  }
-};
+    try {
+      const res = await fetch(`${API_BASE}/save_summary`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          flow_id: flowId,
+          summary_fields: payload,
+          skip,
+        }),
+      });
 
- 
+      const result = await res.json();
+
+      if (!res.ok) {
+        setErrorMsg(result.error || "Save failed");
+        return false;
+      }
+
+      setErrorMsg("");
+      setData(prev => ({ ...prev, ...payload }));
+      return true;
+
+    } catch (err) {
+      console.error(err);
+      setErrorMsg("Network error. Please try again.");
+      return false;
+    }
+  };
+
+  
   useEffect(() => {
     setSaveFunction(() => saveSummary);
-  }, []);
+  }, [selected]);
 
   return (
     <div className="p-4 border rounded mt-4">
+      
+      {errorMsg && (
+        <div className="mt-4 flex justify-center">
+          <div className="inline-block rounded-md bg-red-100 border border-red-400 text-red-700 px-6 py-2 text-sm font-medium shadow-sm">
+            {errorMsg}
+          </div>
+        </div>
+      )}
+
       <h2 className="font-bold mb-4 text-lg">Summary</h2>
 
       <div className="flex flex-col gap-3">

@@ -27,14 +27,14 @@ const SuggestProduct = ({ data, setData, setSaveFunction }) => {
     setData(updated);
   };
 
-  
+ 
   const saveSuggest = async (flowId, stepData, options = {}) => {
   const token = localStorage.getItem("AUTH_TOKEN");
   if (!flowId || !token) return false;
 
   const skip = options.skip === true;
 
-  
+ 
   if (!skip && Object.values(stepData).some((v) => v === null)) {
     showError("Please select an option before proceeding.");
     return false;
@@ -76,6 +76,7 @@ const SuggestProduct = ({ data, setData, setSaveFunction }) => {
 
   useEffect(() => {
     setSaveFunction(() => saveSuggest);
+
   }, []);
 
   return (
@@ -83,10 +84,13 @@ const SuggestProduct = ({ data, setData, setSaveFunction }) => {
       <h2 className="font-bold mb-4 text-lg">Product Suggestion</h2>
 
       {errorMsg && (
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded shadow-md z-10">
-          {errorMsg}
+        <div className="mt-4 flex justify-center">
+          <div className="inline-block rounded-md bg-red-100 border border-red-400 text-red-700 px-6 py-2 text-sm font-medium shadow-sm">
+            {errorMsg}
+          </div>
         </div>
       )}
+
 
       {questions.map((key) => (
         <div

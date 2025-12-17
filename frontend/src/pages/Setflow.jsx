@@ -175,28 +175,13 @@ const Setflow = () => {
     }
   };
 
-  // ==================================================
-  // VALIDATION
-  // ==================================================
-  const validateStep = async () => {
-    const stepName = steps[activeIndex];
-
-    if (stepName === "Landing Page") {
-      if (!landingData.uploadedThumbnailUrl && !landingData.selectedPosition) {
-        alert("Upload thumbnail OR select CTA position.");
-        return false;
-      }
-    }
-    return true;
-  };
-
+  
   // ==================================================
   // SAVE & NEXT
   // ==================================================
   const handleSaveNext = async () => {
     const stepName = steps[activeIndex];
-    const valid = await validateStep();
-    if (!valid) return;
+
 
     let shouldSave = false;
     if (stepName === "Landing Page")
@@ -209,14 +194,14 @@ const Setflow = () => {
       shouldSave = isDataChanged(lastSavedContact, contactData);
     if (stepName === "Segmentation") shouldSave = true;
     if (stepName === "Skin Goal") shouldSave = true;
-    if (stepName === "Summary")
-      shouldSave = isDataChanged(lastSavedSummary, summaryData);
+    if (stepName === "Summary") shouldSave = true;
     if (stepName === "Suggest Product")
       shouldSave = isDataChanged(lastSavedSuggest, suggestData);
 
     let saved = true;
     if (shouldSave) {
       saved = await saveStep(false);
+    
 
       if (skippedSteps[stepName]) {
         const updatedSkipped = { ...skippedSteps };
