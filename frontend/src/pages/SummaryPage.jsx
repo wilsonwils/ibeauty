@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import { API_BASE } from "../utils/api";
 
 const SummaryPage = ({ data, setData, setSaveFunction }) => {
@@ -17,90 +17,72 @@ const SummaryPage = ({ data, setData, setSaveFunction }) => {
     ...data,
   }));
 
-  // ✅ REF ALWAYS HOLDS LATEST STATE
-  const selectedRef = useRef(selected);
-
-  useEffect(() => {
-    selectedRef.current = selected;
-  }, [selected]);
-
+  // ✅ toggle yes / no
   const toggle = (key, value) => {
-  setSelected((prev) => {
-    const updated = {
+    setSelected((prev) => ({
       ...prev,
-      [key]: value,
-    };
-
-    // 🔑 SYNC WITH SETFLOW STATE
-    setData((d) => ({
-      ...d,
       [key]: value,
     }));
 
-    return updated;
-  });
+    // sync with Setflow data
+    setData((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  };
+
+  // ✅ SAVE FUNCTION (no useRef)
+  const saveSummary = async (flowId, stepData, options = {}) => {
+  const token = localStorage.getItem("AUTH_TOKEN");
+  if (!flowId || !token) return false;
+
+  const skip = options.skip === true;
+
+  const payload = skip
+    ? {}
+    : Object.fromEntries(
+        Object.entries(stepData).filter(([_, value]) => value !== null)
+      );
+
+  try {
+    const res = await fetch(`${API_BASE}/save_summary`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        flow_id: flowId,
+        summary_fields: payload,
+        skip,
+      }),
+    });
+
+    const result = await res.json();
+
+    if (!res.ok) {
+      alert(result.error || "Save failed");
+      return false;
+    }
+
+    if (!skip) {
+      setData((prev) => ({
+        ...prev,
+        ...payload,
+      }));
+    }
+
+    return true;
+  } catch (err) {
+    console.error(err);
+    return false;
+  }
 };
 
-  // ✅ SAVE FUNCTION (reads from ref, not stale state)
-  const saveSummary = useCallback(
-    async (flowId, _data, options = {}) => {
-      const token = localStorage.getItem("AUTH_TOKEN");
-      if (!flowId || !token) return false;
-
-      const skip = options.skip === true;
-
-      const source = selectedRef.current;
-
-      const payload = skip
-        ? {}
-        : Object.fromEntries(
-            Object.entries(source).filter(
-              ([_, value]) => value !== null
-            )
-          );
-
-      try {
-        const res = await fetch(`${API_BASE}/save_summary`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            flow_id: flowId,
-            summary_fields: payload,
-            skip,
-          }),
-        });
-
-        const result = await res.json();
-
-        if (!res.ok) {
-          alert(result.error || "Save failed");
-          return false;
-        }
-
-        if (!skip) {
-          setData((prev) => ({
-            ...prev,
-            ...payload,
-          
-          }));
-        }
-
-        return true;
-      } catch (e) {
-        console.error(e);
-        return false;
-      }
-    },
-    [setData]
-  );
-
-  // ✅ register save fn
+ 
   useEffect(() => {
     setSaveFunction(() => saveSummary);
-  }, [saveSummary, setSaveFunction]);
+  }, []);
 
   return (
     <div className="p-4 border rounded mt-4">

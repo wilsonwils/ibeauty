@@ -10,27 +10,26 @@ const CapturePage = ({ data, setData, setSaveFunction }) => {
   }, [description, setData]);
 
   useEffect(() => {
-  const saveCapturePage = async (flowId) => {
-    const userId = localStorage.getItem("userId");
-    const token = localStorage.getItem("AUTH_TOKEN"); 
-    console.log(token);
-    if (!userId || !flowId || !token) return false;
+  const saveCapturePage = async (flowId, _stepData, options = {}) => {
+    const token = localStorage.getItem("AUTH_TOKEN");
+    if (!flowId || !token) return false;
+
+    const skip = options?.skip === true;
 
     try {
       const res = await fetch(`${API_BASE}/save_capture_page`, {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}` 
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-       flow_id: flowId,
-       text_area: description,
+          flow_id: flowId,
+          skip,
+          text_area: skip ? null : _stepData?.description || "",
         }),
-
       });
 
-      await res.json();
       return res.ok;
     } catch (err) {
       console.error("Save error:", err);
@@ -39,7 +38,7 @@ const CapturePage = ({ data, setData, setSaveFunction }) => {
   };
 
   setSaveFunction(() => saveCapturePage);
-}, [description, setSaveFunction]);
+}, [setSaveFunction]);
 
   return (
     <div className="flex flex-col gap-4">

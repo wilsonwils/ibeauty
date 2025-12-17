@@ -18,7 +18,7 @@ const Setflow = () => {
     "Segmentation",
     "Skin Goal",
     "Summary",
-    "Routine",
+    // "Routine",
     "Suggest Product",
   ];
 
@@ -150,7 +150,7 @@ const Setflow = () => {
       setFlowIds(updated);
       localStorage.setItem(getUserKey("flow_ids"), JSON.stringify(updated));
 
-      // 🔥 PASS SKIP FLAG TO CHILD
+      //  PASS SKIP FLAG TO CHILD
       if (typeof currentSaveFunction === "function") {
         let stepData = {};
         if (stepName === "Landing Page") stepData = landingData;
@@ -323,7 +323,7 @@ const Setflow = () => {
     if (!saved) return;
 
     setIsCompleted(true);
-    setActiveIndex(0); // ✅ GO TO LANDING PAGE
+    setActiveIndex(0); // GO TO LANDING PAGE
   };
 
   // ==================================================
@@ -376,7 +376,7 @@ const Setflow = () => {
       setData={setSummaryData}
       setSaveFunction={setCurrentSaveFunction}
     />,
-    <div key="routine">Content for Summary & Routine</div>,
+    // <div key="routine">Content for Summary & Routine</div>,
     <SuggestProduct
       key="suggest"
       data={Object.keys(suggestData).length ? suggestData : lastSavedSuggest}

@@ -34,84 +34,58 @@ const Questionaire = ({ data, setData, setSaveFunction }) => {
 
   // Save function
   useEffect(() => {
-    const saveQuestionaire = async (flowId) => {
-      const user_id = localStorage.getItem("userId");
-      const token = localStorage.getItem("AUTH_TOKEN");
-      if (!flowId || !user_id || !token) return false;
+  const saveQuestionaire = async (flowId, _stepData, options = {}) => {
+    const user_id = localStorage.getItem("userId");
+    const token = localStorage.getItem("AUTH_TOKEN");
+    if (!flowId || !user_id || !token) return false;
 
-      const isSkipMode = Object.keys(questionaire).every(
-        (k) => questionaire[k] === false || questionaire[k] === undefined
-      );
+    const skip = options?.skip === true; // USE PARENT FLAG
 
-      if (!isSkipMode) {
-        for (const field of Object.keys(questionaireFields)) {
-          const config = questionaireFields[field];
-          if (questionaire[field] && !config.noInput) {
-            if (config.multi && (!answers[field] || answers[field].length === 0)) {
-              showPopup(`Please select at least one option for "${field}"`);
-              return false;
-            }
-            if (
-              field === "Skin Type" &&
-              (!answers["Skin Type"] || answers["Skin Type"].length === 0)
-            ) {
-              showPopup("Please add at least one skin type");
-              return false;
-            }
-            if (
-              !config.multi &&
-              field !== "Skin Type" &&
-              (!answers[field] || answers[field].toString().trim() === "")
-            ) {
-              showPopup(`Please fill the input for "${field}"`);
-              return false;
-            }
-          }
-        }
-      }
+    const dataToSave = skip ? {} : _stepData || { questionaire, answers, required };
 
-      const fields = {};
-      Object.keys(questionaireFields).forEach((field) => {
-        fields[field] = {
-          yes_no: questionaire[field] ? "yes" : "no",
-          value: answers[field] || (questionaireFields[field].multi ? [] : null),
-          required: required[field] || false,
-          type: questionaireFields[field].type || "yes_no",
-          options: questionaireFields[field].options || null,
-        };
+    const fields = {};
+    Object.keys(questionaireFields).forEach((field) => {
+      fields[field] = {
+        yes_no: dataToSave.questionaire?.[field] ? "yes" : "no",
+        value: dataToSave.answers?.[field] || (questionaireFields[field].multi ? [] : null),
+        required: dataToSave.required?.[field] || false,
+        type: questionaireFields[field].type || "yes_no",
+        options: questionaireFields[field].options || null,
+      };
+    });
+
+    try {
+      const res = await fetch(`${API_BASE}/save_questionaire`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          flow_id: flowId,
+          user_id,
+          fields,
+          skip,
+        }),
       });
 
-      try {
-        const res = await fetch(`${API_BASE}/save_questionaire`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            flow_id: flowId,
-            user_id,
-            fields,
-            skip: isSkipMode,
-          }),
-        });
-
-        const result = await res.json();
-        if (!res.ok) {
-          showPopup(`Failed to save questionaire: ${result.error}`);
-          return false;
-        }
-
-        return true;
-      } catch (err) {
-        console.error(err);
-        showPopup("Failed to save questionaire.");
+      const result = await res.json();
+      if (!res.ok) {
+        showPopup(`Failed to save questionaire: ${result.error}`);
         return false;
       }
-    };
 
-    setSaveFunction(() => saveQuestionaire);
-  }, [answers, questionaire, required, setSaveFunction]);
+      return true;
+    } catch (err) {
+      console.error(err);
+      showPopup("Failed to save questionaire.");
+      return false;
+    }
+  };
+
+  setSaveFunction(() => saveQuestionaire);
+}, [setSaveFunction]);
+
 
   const toggleGenderOption = (opt) => {
     setAnswers((prev) => ({

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState } from "react";
 import { API_BASE } from "../utils/api";
 
 const SuggestProduct = ({ data, setData, setSaveFunction }) => {
@@ -28,76 +28,65 @@ const SuggestProduct = ({ data, setData, setSaveFunction }) => {
   };
 
   
-  const saveSuggest = useCallback(
-    async (flowId, _data, options = {}) => {
-      const token = localStorage.getItem("AUTH_TOKEN");
-      if (!flowId || !token) return false;
+  const saveSuggest = async (flowId, stepData, options = {}) => {
+  const token = localStorage.getItem("AUTH_TOKEN");
+  if (!flowId || !token) return false;
 
-      const skip = options.skip === true;
+  const skip = options.skip === true;
 
-      
-      if (!skip && Object.values(selected).some((v) => v === null)) {
-        showError("Please select an option before proceeding.");
-        return false;
-      }
+  
+  if (!skip && Object.values(stepData).some((v) => v === null)) {
+    showError("Please select an option before proceeding.");
+    return false;
+  }
 
-      const payload = skip
-        ? questions.reduce((acc, q) => ({ ...acc, [q]: null }), {})
-        : selected;
+  const payload = skip
+    ? questions.reduce((acc, q) => ({ ...acc, [q]: null }), {})
+    : stepData;
 
-      try {
-        const res = await fetch(`${API_BASE}/save_suggestproduct`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            flow_id: flowId,
-            suggest_fields: payload,
-            skip,
-          }),
-        });
+  try {
+    const res = await fetch(`${API_BASE}/save_suggestproduct`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        flow_id: flowId,
+        suggest_fields: payload,
+        skip,
+      }),
+    });
 
-        const result = await res.json();
+    const result = await res.json();
 
-        if (!res.ok) {
-          showError(result.error || "Failed to save suggestion");
-          return false;
-        }
+    if (!res.ok) {
+      showError(result.error || "Failed to save suggestion");
+      return false;
+    }
 
-        if (!skip) {
-          setData((prev) => ({
-            ...prev,
-            ...selected,
-          }));
-        }
+    return true;
+  } catch (err) {
+    console.error("Save error:", err);
+    showError("Failed to save suggestion");
+    return false;
+  }
+};
 
-        return true;
-      } catch (err) {
-        console.error("Save error:", err);
-        showError("Failed to save suggestion");
-        return false;
-      }
-    },
-    [selected, setData, questions]
-  );
 
   useEffect(() => {
     setSaveFunction(() => saveSuggest);
-  }, [saveSuggest, setSaveFunction]);
+  }, []);
 
   return (
     <div>
       <h2 className="font-bold mb-4 text-lg">Product Suggestion</h2>
 
-      {/* Error message popup */}
-        {errorMsg && (
+      {errorMsg && (
         <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-red-500 text-white px-4 py-2 rounded shadow-md z-10">
           {errorMsg}
         </div>
       )}
-      
 
       {questions.map((key) => (
         <div
@@ -110,7 +99,9 @@ const SuggestProduct = ({ data, setData, setSaveFunction }) => {
             <button
               onClick={() => toggle(key, true)}
               className={`px-4 py-1 rounded ${
-                selected[key] === true ? "bg-[#01bcd5] text-white" : "bg-gray-300"
+                selected[key] === true
+                  ? "bg-[#01bcd5] text-white"
+                  : "bg-gray-300"
               }`}
             >
               Yes
@@ -119,7 +110,9 @@ const SuggestProduct = ({ data, setData, setSaveFunction }) => {
             <button
               onClick={() => toggle(key, false)}
               className={`px-4 py-1 rounded ${
-                selected[key] === false ? "bg-[#01bcd5] text-white" : "bg-gray-300"
+                selected[key] === false
+                  ? "bg-[#01bcd5] text-white"
+                  : "bg-gray-300"
               }`}
             >
               No
