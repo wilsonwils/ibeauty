@@ -127,7 +127,7 @@ const LandingPage = ({ data, setData, setSaveFunction }) => {
         <div className="mt-4">
           <p className="font-semibold">Preview:</p>
           <img
-            src={uploadedThumbnailUrl}
+            src={uploadedThumbnailUrl ? `${API_BASE}${uploadedThumbnailUrl}` : "/placeholder.png"}
             alt="Thumbnail"
             className="h-32 w-32 object-cover rounded"
           />
