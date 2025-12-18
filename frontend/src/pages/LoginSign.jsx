@@ -445,7 +445,8 @@ function LoginSign() {
       localStorage.setItem("AUTH_TOKEN", data.token);
       localStorage.setItem("userId", data.userId);
       localStorage.setItem("orgId", data.organizationId);
-
+	  localStorage.setItem("accessModules", JSON.stringify(data.allowed_modules));
+	  
      
       if (isTokenValid(data.token)) {
         const payload = getTokenPayload(data.token);

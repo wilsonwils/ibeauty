@@ -220,12 +220,14 @@ def login():
             "user_id": user_id,
             "organization_id": org_id
         })
-
+        from services.module_permission_service import get_allowed_modules
+        modules = get_allowed_modules(org_id, user_id)
         return jsonify({
             "message": "Login successful",
             "token": token,
             "userId": user_id,
-            "organizationId": org_id
+            "organizationId": org_id,
+            "allowed_modules": modules
         }), 200
 
     finally:
