@@ -9,7 +9,7 @@ flow_bp = Blueprint("flow", __name__)
 # -------------------------------------------------------------------
 @flow_bp.post("/create_flow")
 def create_flow():
-    # 1️⃣ TOKEN
+    # 1 TOKEN
     auth = request.headers.get("Authorization")
     if not auth:
         return jsonify({"error": "Token required"}), 401
@@ -22,7 +22,7 @@ def create_flow():
     user_id = payload["user_id"]
     organization_id = payload["organization_id"]
 
-    # 2️⃣ BODY
+    # 2 BODY
     data = request.get_json() or {}
     flow_name = data.get("flow_name")
     description = data.get("description", "")
@@ -326,7 +326,7 @@ def save_contact_page():
 
     fields = ["name", "phone", "whatsapp", "email"]
 
-    # ✅ IF SKIP → FORCE EMPTY
+   
     if skip:
         selected_fields = []
     else:
@@ -417,7 +417,6 @@ def save_segmentation():
 
     segmentation_fields = data.get("segmentation_fields")
 
-    # ✅ SKIP → FORCE EMPTY LIST
     if skip:
         segmentation_fields = []
     else:
@@ -511,7 +510,7 @@ def save_skingoal():
     if not flow_id:
         return jsonify({"error": "flow_id is required"}), 400
 
-    # ❌ Do NOT allow empty save unless skipped
+   
     if not skip and not skingoal_fields:
         return jsonify({"error": "Select at least one skin goal"}), 400
 
@@ -574,6 +573,7 @@ def save_skingoal():
         cur.close()
         conn.close()
 
+
 @flow_bp.post("/save_summary")
 def save_summary():
     auth = request.headers.get("Authorization")
@@ -590,41 +590,41 @@ def save_summary():
 
     data = request.get_json() or {}
     flow_id = data.get("flow_id")
-    summary_fields = data.get("summary_fields")
+    summary_fields = data.get("summary_fields") or {}
     skip = data.get("skip") is True
 
     if not flow_id:
         return jsonify({"error": "flow_id is required"}), 400
 
     if not skip and not summary_fields:
-        return jsonify({"error": "Select at least one summary option"}), 400
-
-    summary_fields = summary_fields or {}
+        return jsonify({
+            "error": "Please select Yes or No for all summary options"
+        }), 400
 
     conn = get_connection()
     cur = conn.cursor()
 
     try:
-        # check if flow exists
+        # check flow ownership
         cur.execute("""
             SELECT id FROM flows
             WHERE id=%s AND organization_id=%s
         """, (flow_id, organization_id))
+
         if not cur.fetchone():
             return jsonify({"error": "Invalid flow or unauthorized"}), 403
 
-        field_name = {}
-        for key, value in summary_fields.items():
-            db_key = key.lower().replace(" ", "_").replace("-", "_")
-            field_name[db_key] = "yes" if value else "no"
+        # convert frontend keys → db keys
+        field_name = {
+            key.lower().replace(" ", "_"): "yes" if value else "no"
+            for key, value in summary_fields.items()
+        }
 
-        field_name_json = json.dumps(field_name)
-
-        # update or insert without returning any summary_id
         cur.execute("""
             SELECT id FROM organization_summary
             WHERE flow_id=%s AND user_id=%s
         """, (flow_id, user_id))
+
         existing = cur.fetchone()
 
         if existing:
@@ -632,30 +632,25 @@ def save_summary():
                 UPDATE organization_summary
                 SET field_name=%s
                 WHERE id=%s
-            """, (field_name_json, existing[0]))
+            """, (json.dumps(field_name), existing[0]))
         else:
             cur.execute("""
                 INSERT INTO organization_summary
                 (user_id, organization_id, flow_id, field_name)
                 VALUES (%s, %s, %s, %s)
-            """, (user_id, organization_id, flow_id, field_name_json))
+            """, (user_id, organization_id, flow_id, json.dumps(field_name)))
 
         conn.commit()
+        return jsonify({"message": "Summary saved"}), 201
 
-        return jsonify({
-            "message": "Summary saved successfully",
-            "flow_id": flow_id,
-            "organization_id": organization_id,
-            "skip": skip
-        }), 201
-
-    except Exception as e:
+    except Exception:
         conn.rollback()
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Something went wrong"}), 500
 
     finally:
         cur.close()
         conn.close()
+
 
 
 

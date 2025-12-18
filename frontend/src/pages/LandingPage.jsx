@@ -9,8 +9,9 @@ const LandingPage = ({ data, setData, setSaveFunction }) => {
     data.selectedPosition || ""
   );
   const [isUploading, setIsUploading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
-
+  // Sync state with parent
   useEffect(() => {
     setData((prev) => ({
       ...prev,
@@ -19,43 +20,62 @@ const LandingPage = ({ data, setData, setSaveFunction }) => {
     }));
   }, [uploadedThumbnailUrl, selectedPosition, setData]);
 
- useEffect(() => {
-  const saveLandingPage = async (flowId) => {
-    const userId = localStorage.getItem("userId");
-    const token = localStorage.getItem("AUTH_TOKEN"); 
-    if (!userId || !flowId || !token) return false;
-
-    try {
-      const res = await fetch(`${API_BASE}/save_landing_page`, {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}` 
-        },
-        body: JSON.stringify({
-          flow_id: flowId,
-          user_id: userId,
-          thumbnail: uploadedThumbnailUrl || null,
-          cta_position: selectedPosition || null,
-        }),
-      });
-
-      const result = await res.json();
-
-      if (res.ok && result.id) {
-        setData((prev) => ({ ...prev, landing_id: result.id }));
-      }
-
-      return res.ok;
-    } catch (err) {
-      console.error("Landing page save error:", err);
-      return false;
-    }
+  // Show error popup
+  const showError = (msg) => {
+    setErrorMsg(msg);
+    setTimeout(() => setErrorMsg(""), 3000);
   };
 
-  setSaveFunction(() => saveLandingPage);
-}, [uploadedThumbnailUrl, selectedPosition, setData, setSaveFunction]);
+  // Save function
+  useEffect(() => {
+    const saveLandingPage = async (flowId, stepData, options = {}) => {
+  const userId = localStorage.getItem("userId");
+  const token = localStorage.getItem("AUTH_TOKEN");
+  if (!userId || !flowId || !token) return false;
 
+  const skip = options?.skip === true;
+
+ 
+  if (!skip && (!uploadedThumbnailUrl || !selectedPosition)) {
+    showError("Please upload a thumbnail AND select a CTA position");
+    return false;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/save_landing_page`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        flow_id: flowId,
+        user_id: userId,
+        thumbnail: uploadedThumbnailUrl,
+        cta_position: selectedPosition,
+      }),
+    });
+
+    const result = await res.json();
+
+    if (!res.ok) {
+      showError(result.error || "Failed to save landing page");
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    console.error("Landing page save error:", err);
+    showError("Failed to save landing page.");
+    return false;
+  }
+};
+
+
+    setSaveFunction(() => saveLandingPage);
+  }, [uploadedThumbnailUrl, selectedPosition, setData, setSaveFunction]);
+
+  // File upload
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -77,14 +97,24 @@ const LandingPage = ({ data, setData, setSaveFunction }) => {
       }
     } catch (err) {
       console.error("Upload error:", err);
-      alert("Image upload failed.");
+      showError("Image upload failed.");
     } finally {
       setIsUploading(false);
     }
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 relative">
+      {/* Error popup */}
+      {errorMsg && (
+        <div className="mt-4 flex justify-center">
+          <div className="inline-block rounded-md bg-red-100 border border-red-400 text-red-700 px-6 py-2 text-sm font-medium shadow-sm">
+            {errorMsg}
+          </div>
+        </div>
+      )}
+
+
       <label className="font-semibold">Add Thumbnail:</label>
       <input
         type="file"

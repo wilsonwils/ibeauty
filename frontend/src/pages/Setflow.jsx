@@ -11,9 +11,28 @@ import SuggestProduct from "./SuggestProduct";
 import { permissionService } from "../services/permissionService";
 
 const Setflow = () => {
+<<<<<<< HEAD
   // ==================================================
   // USER-SPECIFIC STORAGE KEY
   // ==================================================
+=======
+  const steps = [
+    "Landing Page",
+    "Questionaire",
+    "Capture",
+    "Contact",
+    "Segmentation",
+    "Skin Goal",
+    "Summary",
+    // "Routine",
+    "Suggest Product",
+  ];
+
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [isCompleted, setIsCompleted] = useState(false);
+
+  // -------------------- USER-SPECIFIC LOCALSTORAGE --------------------
+>>>>>>> b6494d93faf5102e10cc2679ae4d8bae84e18d84
   const getUserKey = (key) => {
     const userId = localStorage.getItem("userId");
     return `${key}_${userId || "guest"}`;
@@ -232,6 +251,7 @@ const Setflow = () => {
     try {
       let currentFlowId = flowIds[stepName];
 
+<<<<<<< HEAD
       if (!currentFlowId) {
         const res = await fetch(`${API_BASE}/create_flow`, {
           method: "POST",
@@ -244,6 +264,35 @@ const Setflow = () => {
             flow_name: stepName,
             skip,
           }),
+=======
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Failed to save step");
+        return false;
+      }
+
+      const newFlowId = data.flow_id;
+      if (!newFlowId) return false;
+
+      const updated = { ...flowIds, [stepName]: newFlowId };
+      setFlowIds(updated);
+      localStorage.setItem(getUserKey("flow_ids"), JSON.stringify(updated));
+
+      //  PASS SKIP FLAG TO CHILD
+      if (typeof currentSaveFunction === "function") {
+        let stepData = {};
+        if (stepName === "Landing Page") stepData = landingData;
+        if (stepName === "Questionaire") stepData = questionData;
+        if (stepName === "Capture") stepData = captureData;
+        if (stepName === "Contact") stepData = contactData;
+        if (stepName === "Segmentation") stepData = segmentationData;
+        if (stepName === "Skin Goal") stepData = skingoalData;
+        if (stepName === "Summary") stepData = summaryData;
+        if (stepName === "Suggest Product") stepData = suggestData;
+
+        return await currentSaveFunction(newFlowId, stepData, {
+          skip: skipValue,
+>>>>>>> b6494d93faf5102e10cc2679ae4d8bae84e18d84
         });
 
         const data = await res.json();
@@ -266,6 +315,204 @@ const Setflow = () => {
     }
   };
 
+<<<<<<< HEAD
+=======
+  
+  // ==================================================
+  // SAVE & NEXT
+  // ==================================================
+  const handleSaveNext = async () => {
+    const stepName = steps[activeIndex];
+
+
+    let shouldSave = false;
+    if (stepName === "Landing Page")
+      shouldSave = isDataChanged(lastSavedLanding, landingData);
+    if (stepName === "Questionaire")
+      shouldSave = isDataChanged(lastSavedQuestion, questionData);
+    if (stepName === "Capture")
+      shouldSave = isDataChanged(lastSavedCapture, captureData);
+    if (stepName === "Contact")
+      shouldSave = isDataChanged(lastSavedContact, contactData);
+    if (stepName === "Segmentation") shouldSave = true;
+    if (stepName === "Skin Goal") shouldSave = true;
+    if (stepName === "Summary") shouldSave = true;
+    if (stepName === "Suggest Product")
+      shouldSave = isDataChanged(lastSavedSuggest, suggestData);
+
+    let saved = true;
+    if (shouldSave) {
+      saved = await saveStep(false);
+    
+
+      if (skippedSteps[stepName]) {
+        const updatedSkipped = { ...skippedSteps };
+        delete updatedSkipped[stepName];
+        setSkippedSteps(updatedSkipped);
+        localStorage.setItem(getUserKey("skipped_steps"), JSON.stringify(updatedSkipped));
+      }
+    }
+
+    if (!saved) return;
+
+    switch (stepName) {
+      case "Landing Page":
+        setLastSavedLanding(landingData);
+        break;
+      case "Questionaire":
+        setLastSavedQuestion(questionData);
+        break;
+      case "Capture":
+        setLastSavedCapture(captureData);
+        break;
+      case "Contact":
+        setLastSavedContact(contactData);
+        break;
+      case "Segmentation":
+        setLastSavedSegmentation(segmentationData);
+        break;
+      case "Skin Goal":
+        setLastSavedSkingoal(skingoalData);
+        break;
+      case "Summary":
+        setLastSavedSummary(summaryData);
+        break;
+      case "Suggest Product":
+        setLastSavedSuggest(suggestData);
+        break;
+      default:
+        break;
+    }
+
+    if (activeIndex < steps.length - 1) {
+      setActiveIndex(activeIndex + 1);
+    }
+  };
+
+  // ==================================================
+  // SKIP & NEXT
+  // ==================================================
+  const goSkip = async () => {
+    const stepName = steps[activeIndex];
+    await saveStep(true);
+
+    const updatedSkipped = { ...skippedSteps, [stepName]: true };
+    setSkippedSteps(updatedSkipped);
+    localStorage.setItem(getUserKey("skipped_steps"), JSON.stringify(updatedSkipped));
+
+    switch (stepName) {
+      case "Landing Page":
+        setLastSavedLanding({});
+        setLandingData({});
+        break;
+      case "Questionaire":
+        setLastSavedQuestion({});
+        setQuestionData({});
+        break;
+      case "Capture":
+        setLastSavedCapture({});
+        setCaptureData({});
+        break;
+      case "Contact":
+        setLastSavedContact({});
+        setContactData({});
+        break;
+      case "Segmentation":
+        setLastSavedSegmentation({});
+        setSegmentationData({});
+        break;
+      case "Skin Goal":
+        setLastSavedSkingoal({});
+        setSkingoalData({});
+        break;
+      case "Summary":
+        setLastSavedSummary({});
+        setSummaryData({});
+        break;
+      case "Suggest Product":
+        setLastSavedSuggest({});
+        setSuggestData({});
+        break;
+      default:
+        break;
+    }
+
+    if (activeIndex < steps.length - 1) {
+      setActiveIndex(activeIndex + 1);
+    }
+  };
+
+  // ==================================================
+  // FINAL SAVE (UPDATED)
+  // ==================================================
+  const handleFinalSave = async () => {
+    const saved = await saveStep(false);
+    if (!saved) return;
+
+    setIsCompleted(true);
+    setActiveIndex(0); // GO TO LANDING PAGE
+  };
+
+  // ==================================================
+  // CONTENT
+  // ==================================================
+  const contents = [
+    <LandingPage
+      key="landing"
+      data={Object.keys(landingData).length ? landingData : lastSavedLanding}
+      setData={setLandingData}
+      setSaveFunction={setCurrentSaveFunction}
+    />,
+    <Questionaire
+      key="questionaire"
+      data={Object.keys(questionData).length ? questionData : lastSavedQuestion}
+      setData={setQuestionData}
+      setSaveFunction={setCurrentSaveFunction}
+    />,
+    <CapturePage
+      key="capture"
+      data={Object.keys(captureData).length ? captureData : lastSavedCapture}
+      setData={setCaptureData}
+      setSaveFunction={setCurrentSaveFunction}
+    />,
+    <ContactPage
+      key="contact"
+      data={Object.keys(contactData).length ? contactData : lastSavedContact}
+      setData={setContactData}
+      setSaveFunction={setCurrentSaveFunction}
+    />,
+    <Segmentation
+      key="segmentation"
+      data={
+        Object.keys(segmentationData).length
+          ? segmentationData
+          : lastSavedSegmentation
+      }
+      setData={setSegmentationData}
+      setSaveFunction={setCurrentSaveFunction}
+    />,
+    <SkingoalPage
+      key="skingoal"
+      data={Object.keys(skingoalData).length ? skingoalData : lastSavedSkingoal}
+      setData={setSkingoalData}
+      setSaveFunction={setCurrentSaveFunction}
+    />,
+    <SummaryPage
+      key="summary"
+      data={Object.keys(summaryData).length ? summaryData : lastSavedSummary}
+      setData={setSummaryData}
+      setSaveFunction={setCurrentSaveFunction}
+    />,
+    // <div key="routine">Content for Summary & Routine</div>,
+    <SuggestProduct
+      key="suggest"
+      data={Object.keys(suggestData).length ? suggestData : lastSavedSuggest}
+      setData={setSuggestData}
+      setSaveFunction={setCurrentSaveFunction}
+    />,
+  ];
+
+>>>>>>> b6494d93faf5102e10cc2679ae4d8bae84e18d84
   // ==================================================
   // RENDER
   // ==================================================

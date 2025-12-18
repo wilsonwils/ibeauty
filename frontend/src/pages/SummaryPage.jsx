@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import { API_BASE } from "../utils/api";
 
 const SummaryPage = ({ data, setData, setSaveFunction }) => {
@@ -7,6 +7,7 @@ const SummaryPage = ({ data, setData, setSaveFunction }) => {
     "Download Pdf Template",
   ];
 
+ 
   const emptyState = questions.reduce((acc, q) => {
     acc[q] = null;
     return acc;
@@ -17,93 +18,92 @@ const SummaryPage = ({ data, setData, setSaveFunction }) => {
     ...data,
   }));
 
-  // ✅ REF ALWAYS HOLDS LATEST STATE
-  const selectedRef = useRef(selected);
+  const [errorMsg, setErrorMsg] = useState("");
 
-  useEffect(() => {
-    selectedRef.current = selected;
-  }, [selected]);
-
+  // toggle Yes / No
   const toggle = (key, value) => {
-  setSelected((prev) => {
-    const updated = {
+    setSelected(prev => ({
       ...prev,
-      [key]: value,
-    };
-
-    // 🔑 SYNC WITH SETFLOW STATE
-    setData((d) => ({
-      ...d,
       [key]: value,
     }));
 
-    return updated;
-  });
-};
+    setData(prev => ({
+      ...prev,
+      [key]: value,
+    }));
 
-  // ✅ SAVE FUNCTION (reads from ref, not stale state)
-  const saveSummary = useCallback(
-    async (flowId, _data, options = {}) => {
-      const token = localStorage.getItem("AUTH_TOKEN");
-      if (!flowId || !token) return false;
+    setErrorMsg("");
+  };
 
-      const skip = options.skip === true;
+  // save function (called by Setflow)
+  const saveSummary = async (flowId, stepData, options = {}) => {
+    const token = localStorage.getItem("AUTH_TOKEN");
+    if (!flowId || !token) return false;
 
-      const source = selectedRef.current;
+    const skip = options.skip === true;
 
-      const payload = skip
-        ? {}
-        : Object.fromEntries(
-            Object.entries(source).filter(
-              ([_, value]) => value !== null
-            )
-          );
+  
+    const payload = skip
+      ? {}
+      : Object.fromEntries(
+          Object.entries(selected).filter(([_, v]) => v !== null)
+        );
 
-      try {
-        const res = await fetch(`${API_BASE}/save_summary`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            flow_id: flowId,
-            summary_fields: payload,
-            skip,
-          }),
-        });
-
-        const result = await res.json();
-
-        if (!res.ok) {
-          alert(result.error || "Save failed");
-          return false;
-        }
-
-        if (!skip) {
-          setData((prev) => ({
-            ...prev,
-            ...payload,
-          
-          }));
-        }
-
-        return true;
-      } catch (e) {
-        console.error(e);
+    if (!skip) {
+      if (Object.keys(payload).length !== questions.length) {
+        setErrorMsg("Please select Yes or No for all fields.");
         return false;
       }
-    },
-    [setData]
-  );
+    }
 
-  // ✅ register save fn
+    try {
+      const res = await fetch(`${API_BASE}/save_summary`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          flow_id: flowId,
+          summary_fields: payload,
+          skip,
+        }),
+      });
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        setErrorMsg(result.error || "Save failed");
+        return false;
+      }
+
+      setErrorMsg("");
+      setData(prev => ({ ...prev, ...payload }));
+      return true;
+
+    } catch (err) {
+      console.error(err);
+      setErrorMsg("Network error. Please try again.");
+      return false;
+    }
+  };
+
+  
   useEffect(() => {
     setSaveFunction(() => saveSummary);
-  }, [saveSummary, setSaveFunction]);
+  }, [selected]);
 
   return (
     <div className="p-4 border rounded mt-4">
+      
+      {errorMsg && (
+        <div className="mt-4 flex justify-center">
+          <div className="inline-block rounded-md bg-red-100 border border-red-400 text-red-700 px-6 py-2 text-sm font-medium shadow-sm">
+            {errorMsg}
+          </div>
+        </div>
+      )}
+
       <h2 className="font-bold mb-4 text-lg">Summary</h2>
 
       <div className="flex flex-col gap-3">
