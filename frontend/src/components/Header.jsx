@@ -75,6 +75,15 @@ const Header = () => {
                 <p className="text-xs text-gray-500">{user?.email}</p>
               </div>
 
+              {/* Edit Profile */}
+              <button
+                className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                onClick={() => navigate("/i-beauty/edit-profile")}
+              >
+                Edit Profile
+              </button>
+
+              {/* Logout */}
               <button
                 className="w-full text-left px-4 py-2 hover:bg-gray-100"
                 onClick={handleLogout}
@@ -82,6 +91,8 @@ const Header = () => {
                 Logout
               </button>
             </div>
+
+
           )}
         </div>
       </div>

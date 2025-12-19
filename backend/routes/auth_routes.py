@@ -88,14 +88,13 @@ def signup():
     email = data.get("email")
     password = data.get("password")
     org_name = data.get("organization")
+    phone = data.get("phone")  # NEW: get phone
 
-    if not all([first, last, email, password, org_name]):
+    if not all([first, last, email, password, org_name, phone]):
         return jsonify({"status": "error", "message": "Missing required fields"}), 400
 
     full_name = f"{first} {last}"
     password_hash = bcrypt.hash(password)
-
-    # FIX: rename variable to avoid overwriting function
     email_verify_token = secrets.token_urlsafe(32)
 
     conn = get_connection()
@@ -115,13 +114,13 @@ def signup():
         """, (org_name, None, "free"))
         org_id = cur.fetchone()[0]
 
-        # Create user
+        # Create user with phone
         cur.execute("""
             INSERT INTO users
-            (organization_id, email, password_hash, oauth_provider, oauth_provider_id, full_name, role, is_active, created_at)
-            VALUES (%s, %s, %s, NULL, %s, %s, %s, FALSE, NOW())
+            (organization_id, email, password_hash, oauth_provider, oauth_provider_id, full_name, phone, role, is_active, created_at)
+            VALUES (%s, %s, %s, NULL, %s, %s, %s, %s, FALSE, NOW())
             RETURNING id
-        """, (org_id, email, password_hash, email_verify_token, full_name, 'user'))
+        """, (org_id, email, password_hash, email_verify_token, full_name, phone, 'user'))
         user_id = cur.fetchone()[0]
 
         conn.commit()
@@ -137,6 +136,115 @@ def signup():
             "organizationId": org_id,
             "userId": user_id
         }), 201
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"status": "error", "message": str(e)}), 400
+
+    finally:
+        cur.close()
+        conn.close()
+
+@auth_bp.get("/get-profile/<int:user_id>")
+def get_profile(user_id):
+    conn = get_connection()
+    cur = conn.cursor()
+    
+    try:
+        # Get user info with organization
+        cur.execute("""
+            SELECT u.id, u.full_name, u.email, u.phone, o.name AS organization_name
+            FROM users u
+            LEFT JOIN organizations o ON u.organization_id = o.id
+            WHERE u.id = %s
+        """, (user_id,))
+        
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"status": "error", "message": "User not found"}), 404
+        
+        user_data = {
+            "id": row[0],
+            "fullName": row[1],
+            "email": row[2],
+            "phone": row[3],
+            "organization": row[4]
+        }
+
+        # Split full_name into first and last name
+        if user_data["fullName"]:
+            parts = user_data["fullName"].split(" ", 1)
+            user_data["firstName"] = parts[0]
+            user_data["lastName"] = parts[1] if len(parts) > 1 else ""
+
+        return jsonify({"status": "success", "user": user_data}), 200
+
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+
+    finally:
+        cur.close()
+        conn.close()
+
+
+
+@auth_bp.put("/update-profile")
+def update_profile():
+    data = request.json or {}
+
+    user_id = data.get("user_id")
+    first = data.get("firstName")
+    last = data.get("lastName")
+    phone = data.get("phone")  # keep phone
+    organization_name = data.get("organization")  # optional
+
+    if not user_id:
+        return jsonify({"status": "error", "message": "User ID required"}), 400
+
+    if not first or not last:
+        return jsonify({"status": "error", "message": "First and last name required"}), 400
+
+    full_name = f"{first} {last}"
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    try:
+        # Get organization_id for this user
+        cur.execute("""
+            SELECT organization_id
+            FROM users
+            WHERE id = %s
+        """, (user_id,))
+        row = cur.fetchone()
+
+        if not row:
+            return jsonify({"status": "error", "message": "User not found"}), 404
+
+        organization_id = row[0]
+
+        # Update users table (without password)
+        cur.execute("""
+            UPDATE users
+            SET full_name = %s,
+                phone = %s
+            WHERE id = %s
+        """, (full_name, phone, user_id))
+
+        # Update organization name if provided
+        if organization_name:
+            cur.execute("""
+                UPDATE organizations
+                SET name = %s
+                WHERE id = %s
+            """, (organization_name, organization_id))
+
+        conn.commit()
+
+        return jsonify({
+            "status": "success",
+            "message": "Profile updated successfully"
+        }), 200
 
     except Exception as e:
         conn.rollback()
@@ -372,6 +480,86 @@ def check_module_access():
 
         # ACCESS GRANTED
         return jsonify({"access": True, "message": "Access granted"}), 200
+
+    finally:
+        cur.close()
+        conn.close()
+
+
+@auth_bp.get("/my-modules")
+def get_my_modules():
+    token = request.headers.get("Authorization")
+    if not token:
+        return jsonify({"error": "Token required"}), 401
+
+    token = token.replace("Bearer ", "").strip()
+    payload = decode_token(token)
+    if not payload:
+        return jsonify({"error": "Invalid or expired token"}), 401
+
+    # Get user_id from token
+    user_id = payload.get["user_id"]
+    if not user_id:
+        return jsonify({"error": "User ID not found in token"}), 401
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("""
+            SELECT plan_id
+            FROM module_permission
+            WHERE user_id = %s
+            LIMIT 1
+        """, (user_id,))
+
+        row = cur.fetchone()
+
+        return jsonify({
+            "status": "success",
+            "plan_id": row[0] if row else None
+        })
+
+    finally:
+        cur.close()
+        conn.close()
+
+        
+@auth_bp.get("/users")
+def get_all_users():
+    conn = get_connection()
+    cur = conn.cursor()
+
+    try:
+        # Fetch users with organization name
+        cur.execute("""
+            SELECT 
+                u.id,
+                u.full_name,
+                u.email,
+                u.phone,
+                o.name AS organization_name
+            FROM users u
+            LEFT JOIN organizations o ON u.organization_id = o.id
+            ORDER BY u.created_at DESC
+        """)
+        rows = cur.fetchall()
+
+        users = []
+        for r in rows:
+            users.append({
+                "id": r[0],
+                "full_name": r[1],
+                "email": r[2],
+                "phone": r[3],
+                "organization_name": r[4] or ""
+            })
+
+        return jsonify({"users": users}), 200
+
+    except Exception as e:
+        print("Error fetching users:", e)
+        return jsonify({"error": "Server error"}), 500
 
     finally:
         cur.close()

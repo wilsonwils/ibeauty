@@ -8,6 +8,7 @@ import analyticicon from "../assets/analytic.png";
 import integicon from "../assets/integ.png";
 import seticon from "../assets/setting.png";
 import logicon from "../assets/logout.png";
+import permicon from "../assets/permission.png"
 
 const Sidebar = () => {
   const [expanded, setExpanded] = useState(false);
@@ -42,6 +43,11 @@ const Sidebar = () => {
       label: "Settings",
       action: () => navigate("/settings"),
     },
+    {
+      icon: permicon,
+      label: "Organization-permission",
+      action: () => navigate("/organization-permission"),
+    },
   ];
 
   // ✅ FILTER MENU ITEMS BASED ON PERMISSION
@@ -57,6 +63,7 @@ const Sidebar = () => {
   });
 
   return (
+    
     <aside
       className={`h-screen bg-[#25AFC1] shadow-xl flex flex-col 
       transition-all duration-300 fixed left-5 top-0 
@@ -70,6 +77,7 @@ const Sidebar = () => {
         <h1 className="text-lg text-[#1b2341] font-semibold">Logo Here</h1>
         <div className="w-8 h-px bg-[#ffffff60] mt-2"></div>
       </div>
+      
 
       {/* MENU SECTION */}
       <div className="mt-12 flex flex-col gap-6 px-3">

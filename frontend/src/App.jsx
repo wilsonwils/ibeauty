@@ -7,6 +7,9 @@ import ProductList from "./pages/ProductList";
 import Layout from "./layout/Layout";
 import Addproduct from "./pages/Addproduct";
 import Setflow from "./pages/Setflow";
+import EditProfile from "./pages/EditProfile";
+import Settings from "./pages/Settings";
+import Permission from "./pages/Permission"
 
 function App() {
   return (
@@ -20,11 +23,15 @@ function App() {
       <Route path="/dashboard" element={<Navigate to="/i-beauty/dashboard" replace />} />
       <Route path="/verify" element={<Navigate to="/i-beauty/verify" replace />} />
       <Route path="/setflow" element={<Navigate to="/i-beauty/setflow" replace />} />
+      <Route path="/edit-profile" element={<Navigate to="/i-beauty/edit-profile" replace />} />
+      <Route path="/settings" element={<Navigate to="/i-beauty/settings" replace />} />
+      <Route path="/organization-permission" element={<Navigate to="/i-beauty/organization-permission" replace />} />
 
       {/* No layout pages */}
       <Route path="/i-beauty" element={<LoginSign />} />
       <Route path="/i-beauty/dashboard" element={<Dashboard />} />
       <Route path="/i-beauty/verify" element={<Verify />} />
+      
 
       {/* Pages WITH header + sidebar */}
       <Route
@@ -60,6 +67,33 @@ function App() {
         </Layout>
       }
       />
+
+        <Route
+          path="/i-beauty/edit-profile"
+          element={
+            <Layout>
+              <EditProfile />
+            </Layout>
+          }
+        />
+
+        <Route 
+          path="/i-beauty/settings"
+          element={
+            <Layout>
+              <Settings />
+            </Layout>
+          }
+        />
+        <Route 
+          path="/i-beauty/organization-permission"
+          element={
+            <Layout>
+              <Permission />
+            </Layout>
+          }
+        />
+
 
     </Routes>
 
