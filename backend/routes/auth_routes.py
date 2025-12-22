@@ -497,8 +497,8 @@ def get_my_modules():
     if not payload:
         return jsonify({"error": "Invalid or expired token"}), 401
 
-    # Get user_id from token
-    user_id = payload.get["user_id"]
+    # ✅ FIX HERE
+    user_id = payload.get("user_id")
     if not user_id:
         return jsonify({"error": "User ID not found in token"}), 401
 
@@ -531,18 +531,24 @@ def get_all_users():
     cur = conn.cursor()
 
     try:
-        # Fetch users with organization name
         cur.execute("""
             SELECT 
                 u.id,
                 u.full_name,
                 u.email,
                 u.phone,
-                o.name AS organization_name
+                o.name AS organization_name,
+                mpp.plan_name
             FROM users u
-            LEFT JOIN organizations o ON u.organization_id = o.id
+            LEFT JOIN organizations o 
+                ON u.organization_id = o.id
+            LEFT JOIN module_permission mp 
+                ON mp.organization_id = u.organization_id
+            LEFT JOIN module_payment_plan mpp 
+                ON mp.plan_id = mpp.id
             ORDER BY u.created_at DESC
         """)
+
         rows = cur.fetchall()
 
         users = []
@@ -552,7 +558,8 @@ def get_all_users():
                 "full_name": r[1],
                 "email": r[2],
                 "phone": r[3],
-                "organization_name": r[4] or ""
+                "organization_name": r[4] or "",
+                "plan": r[5] or "-"
             })
 
         return jsonify({"users": users}), 200
@@ -564,6 +571,7 @@ def get_all_users():
     finally:
         cur.close()
         conn.close()
+
 
 
 

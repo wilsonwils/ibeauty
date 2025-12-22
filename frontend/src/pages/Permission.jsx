@@ -39,11 +39,14 @@ const Permission = () => {
     }
   };
 
-  return (
-    <div className="p-6">
-      <h2 className="text-xl font-semibold mb-4">Permissions</h2>
+return (
+  
+    <div className="bg-white p-6 rounded shadow-md max-w-6xl mx-auto">
+      <h2 className="text-2xl font-semibold mb-6">
+        Permissions
+      </h2>
 
-      <div className="bg-white rounded-lg shadow overflow-x-auto">
+      <div className="overflow-x-auto">
         <table className="min-w-full border border-gray-200">
           <thead className="bg-gray-100">
             <tr>
@@ -84,18 +87,28 @@ const Permission = () => {
               !error &&
               users.map((user) => (
                 <tr key={user.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-2 border">{user.full_name}</td>
-                  <td className="px-4 py-2 border">{user.email}</td>
-                  <td className="px-4 py-2 border">{user.phone}</td>
-                  <td className="px-4 py-2 border">{user.organization_name || "-"}</td>
-                  <td className="px-4 py-2 border">{user.plan || "-"}</td>
+                  <td className="px-4 py-2 border">
+                    {user.full_name}
+                  </td>
+                  <td className="px-4 py-2 border">
+                    {user.email}
+                  </td>
+                  <td className="px-4 py-2 border">
+                    {user.phone}
+                  </td>
+                  <td className="px-4 py-2 border">
+                    {user.organization_name || "-"}
+                  </td>
+                  <td className="px-4 py-2 border">
+                    {user.plan || "-"}
+                  </td>
                 </tr>
               ))}
           </tbody>
         </table>
       </div>
     </div>
-  );
-};
 
+);
+};
 export default Permission;
