@@ -45,7 +45,7 @@ const Sidebar = () => {
     },
     {
       icon: permicon,
-      label: "Organization-permission",
+      label: "permission",
       action: () => navigate("/organization-permission"),
     },
   ];
@@ -66,8 +66,8 @@ const Sidebar = () => {
     
     <aside
       className={`h-screen bg-[#25AFC1] shadow-xl flex flex-col 
-      transition-all duration-300 fixed left-5 top-0 
-      ${expanded ? "w-40" : "w-30"} rounded-3xl`}
+      transition-all duration-300 fixed left-5 top-2 
+      ${expanded ? "w-44" : "w-34"} rounded-3xl`}
     >
       {/* LOGO */}
       <div

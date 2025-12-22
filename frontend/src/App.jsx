@@ -9,7 +9,8 @@ import Addproduct from "./pages/Addproduct";
 import Setflow from "./pages/Setflow";
 import EditProfile from "./pages/EditProfile";
 import Settings from "./pages/Settings";
-import Permission from "./pages/Permission"
+import Permission from "./pages/Permission";
+import AddPlan from "./pages/AddPlan";
 
 function App() {
   return (
@@ -26,6 +27,7 @@ function App() {
       <Route path="/edit-profile" element={<Navigate to="/i-beauty/edit-profile" replace />} />
       <Route path="/settings" element={<Navigate to="/i-beauty/settings" replace />} />
       <Route path="/organization-permission" element={<Navigate to="/i-beauty/organization-permission" replace />} />
+      <Route path="/add-plan" element={<Navigate to="/i-beauty/add-plan" replace />} />
 
       {/* No layout pages */}
       <Route path="/i-beauty" element={<LoginSign />} />
@@ -90,6 +92,14 @@ function App() {
           element={
             <Layout>
               <Permission />
+            </Layout>
+          }
+        />
+        <Route 
+          path="/i-beauty/add-plan"
+          element={
+            <Layout>
+              <AddPlan />
             </Layout>
           }
         />

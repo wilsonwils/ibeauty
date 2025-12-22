@@ -5,6 +5,8 @@ import secrets
 from datetime import datetime, timedelta
 import jwt
 from passlib.hash import bcrypt
+import json
+import traceback
 
 
 
@@ -497,7 +499,7 @@ def get_my_modules():
     if not payload:
         return jsonify({"error": "Invalid or expired token"}), 401
 
-    # ✅ FIX HERE
+    
     user_id = payload.get("user_id")
     if not user_id:
         return jsonify({"error": "User ID not found in token"}), 401
@@ -524,7 +526,189 @@ def get_my_modules():
         cur.close()
         conn.close()
 
+@auth_bp.post("/update-modules")
+def update_modules():
+    auth = request.headers.get("Authorization")
+    if not auth:
+        return jsonify({"error": "Token required"}), 401
+
+    token = auth.replace("Bearer ", "").strip()
+    payload = decode_token(token)
+    if not payload:
+        return jsonify({"error": "Invalid or expired token"}), 401
+
+    # Optional: logged-in user ID (for permission check)
+    logged_in_user_id = payload.get("user_id")
+
+    data = request.json or {}
+    target_user_id = data.get("user_id")
+    if not target_user_id:
+        return jsonify({"error": "User ID is required"}), 400
+
+    module_ids = data.get("module_ids", [])
+    if not isinstance(module_ids, list):
+        module_ids = []
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    try:
+        module_ids_json = json.dumps(module_ids)
+
+        # Update the selected user's modules
+        cur.execute("""
+            UPDATE module_permission
+            SET customized_module_id = %s
+            WHERE user_id = %s
+        """, (module_ids_json, target_user_id))
+
+        conn.commit()
+
+        return jsonify({
+            "status": "success",
+            "message": f"Customized modules updated successfully for user {target_user_id}"
+        }), 200
+
+    except Exception as e:
+        conn.rollback()
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+    finally:
+        cur.close()
+        conn.close()
+
         
+
+@auth_bp.post("/add-plan")
+def add_plan_to_user():
+    token = request.headers.get("Authorization")
+    if not token:
+        return jsonify({"error": "Token required"}), 401
+
+    token = token.replace("Bearer ", "").strip()
+    payload = decode_token(token)
+    if not payload:
+        return jsonify({"error": "Invalid or expired token"}), 401
+
+    admin_id = payload["user_id"]  # Admin who is adding the plan
+    data = request.json or {}
+
+    # Get user_id and plan_id from request
+    user_id = data.get("user_id")
+    plan_id = data.get("plan_id")
+    customized_modules = data.get("customized_module_id", [])
+
+    if not user_id or not plan_id:
+        return jsonify({"error": "Missing required fields", "received": data}), 400
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    try:
+        # Fetch organization_id for the user if not sent
+        organization_id = data.get("organization_id")
+        if not organization_id:
+            cur.execute("SELECT organization_id FROM users WHERE id=%s", (user_id,))
+            org_row = cur.fetchone()
+            if not org_row:
+                return jsonify({"error": "User not found or has no organization"}), 400
+            organization_id = org_row[0]
+
+        # Debug info
+        print("Adding plan:", {
+            "user_id": user_id,
+            "organization_id": organization_id,
+            "plan_id": plan_id,
+            "added_by": admin_id,
+            "customized_modules": customized_modules
+        })
+
+        # Fetch default modules for the plan
+        cur.execute("""
+            SELECT module_permission_default
+            FROM module_payment_plan
+            WHERE id = %s
+        """, (plan_id,))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"error": "Invalid plan_id"}), 400
+        module_management_id = row[0]  # jsonb
+
+        # Check if a plan already exists
+        cur.execute("""
+            SELECT id
+            FROM module_permission
+            WHERE user_id = %s AND organization_id = %s
+        """, (user_id, organization_id))
+        existing_row = cur.fetchone()
+
+        if existing_row:
+            # Update existing plan
+            cur.execute("""
+                UPDATE module_permission
+                SET 
+                    plan_id = %s,
+                    module_management_id = %s,
+                    customized_module_id = %s,
+                    added_by = %s,
+                    updated_at = NOW()
+                WHERE user_id = %s AND organization_id = %s
+            """, (
+                plan_id,
+                json.dumps(module_management_id),
+                json.dumps(customized_modules),
+                admin_id,
+                user_id,
+                organization_id
+            ))
+            message = "Plan updated successfully"
+        else:
+            # Insert new plan
+            cur.execute("""
+                INSERT INTO module_permission (
+                    organization_id,
+                    user_id,
+                    added_by,
+                    module_management_id,
+                    plan_id,
+                    customized_module_id,
+                    created_at,
+                    updated_at
+                )
+                VALUES (%s,%s,%s,%s,%s,%s,NOW(),NOW())
+            """, (
+                organization_id,
+                user_id,
+                admin_id,
+                json.dumps(module_management_id),
+                plan_id,
+                json.dumps(customized_modules)
+            ))
+            message = "Plan added successfully"
+
+        conn.commit()
+
+        # Debug: confirm row inserted
+        cur.execute("SELECT * FROM module_permission WHERE user_id=%s AND organization_id=%s", (user_id, organization_id))
+        print("Row after insert/update:", cur.fetchall())
+
+        return jsonify({"message": message}), 201
+
+    except Exception as e:
+        conn.rollback()
+        print("ADD/UPDATE PLAN ERROR:", str(e))
+        return jsonify({"error": str(e)}), 500
+
+    finally:
+        cur.close()
+        conn.close()
+
+
+
+
+
+
 @auth_bp.get("/users")
 def get_all_users():
     conn = get_connection()
@@ -534,16 +718,18 @@ def get_all_users():
         cur.execute("""
             SELECT 
                 u.id,
+                u.organization_id,
                 u.full_name,
                 u.email,
                 u.phone,
                 o.name AS organization_name,
-                mpp.plan_name
+                mpp.plan_name,
+                COALESCE(mp.customized_module_id, '[]'::jsonb) AS customized_module_id
             FROM users u
             LEFT JOIN organizations o 
                 ON u.organization_id = o.id
             LEFT JOIN module_permission mp 
-                ON mp.organization_id = u.organization_id
+                ON mp.user_id = u.id
             LEFT JOIN module_payment_plan mpp 
                 ON mp.plan_id = mpp.id
             ORDER BY u.created_at DESC
@@ -555,11 +741,13 @@ def get_all_users():
         for r in rows:
             users.append({
                 "id": r[0],
-                "full_name": r[1],
-                "email": r[2],
-                "phone": r[3],
-                "organization_name": r[4] or "",
-                "plan": r[5] or "-"
+                "organization_id": r[1],
+                "full_name": r[2],
+                "email": r[3],
+                "phone": r[4],
+                "organization_name": r[5] or "",
+                "plan": r[6] or "-",
+                "customized_module_id": r[7]
             })
 
         return jsonify({"users": users}), 200
