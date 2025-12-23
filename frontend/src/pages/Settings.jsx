@@ -4,14 +4,14 @@ import { MODULES, PLAN_SIGNATURES } from "../config/module";
 
 /* ================= PLAN ID MAP (BACKEND → FRONTEND) ================= */
 const PLAN_ID_MAP = {
-  1: "Standard",
+  1: "standard",
   2: "Pro",
   3: "Premium",
 };
 
 /* ================= PLANS ================= */
 const PLANS = [
-  { id: 1, name: "Standard", modules: PLAN_SIGNATURES.Standard },
+  { id: 1, name: "standard", modules: PLAN_SIGNATURES.standard },
   { id: 2, name: "Pro", modules: PLAN_SIGNATURES.Pro },
   { id: 3, name: "Premium", modules: PLAN_SIGNATURES.Premium },
 ];
