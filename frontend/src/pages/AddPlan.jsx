@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { MODULES, PLAN_SIGNATURES } from "../config/module";
 
 const PLANS = [
-  { id: 1, name: "Standard", modules: PLAN_SIGNATURES.Standard },
+  { id: 1, name: "standard", modules: PLAN_SIGNATURES.standard },
   { id: 2, name: "Pro", modules: PLAN_SIGNATURES.Pro },
   { id: 3, name: "Premium", modules: PLAN_SIGNATURES.Premium },
 ];
@@ -90,7 +90,7 @@ const AddPlan = () => {
 
       alert(`Plan "${planName}" added successfully!`);
 
-      // ✅ Redirect to permissions page
+     
       navigate("/i-beauty/organization-permission");
 
     } catch (err) {

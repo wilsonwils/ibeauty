@@ -724,6 +724,7 @@ def get_all_users():
                 u.phone,
                 o.name AS organization_name,
                 mpp.plan_name,
+                COALESCE(mp.module_management_id, '[]'::jsonb) AS default_module_id,
                 COALESCE(mp.customized_module_id, '[]'::jsonb) AS customized_module_id
             FROM users u
             LEFT JOIN organizations o 
@@ -736,7 +737,6 @@ def get_all_users():
         """)
 
         rows = cur.fetchall()
-
         users = []
         for r in rows:
             users.append({
@@ -747,7 +747,8 @@ def get_all_users():
                 "phone": r[4],
                 "organization_name": r[5] or "",
                 "plan": r[6] or "-",
-                "customized_module_id": r[7]
+                "default_module_id": r[7],
+                "customized_module_id": r[8],
             })
 
         return jsonify({"users": users}), 200

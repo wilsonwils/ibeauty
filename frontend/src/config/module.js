@@ -19,7 +19,7 @@ export const MODULES = [
 
 /* ================= PLAN SIGNATURES ================= */
 export const PLAN_SIGNATURES = {
-  Standard: [1, 2, 4, 5, 6, 7, 9, 10, 11, 15],
+  standard: [1, 2, 4, 5, 6, 7, 9, 10, 11, 15],
   Pro: [1, 2, 4, 5, 6, 7, 9, 13, 14, 15],
   Premium: [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15],
 };
