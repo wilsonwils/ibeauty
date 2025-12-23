@@ -591,7 +591,7 @@ def add_plan_to_user():
     if not payload:
         return jsonify({"error": "Invalid or expired token"}), 401
 
-    admin_id = payload["user_id"]  # Admin who is adding the plan
+    admin_id = payload["user_id"]  
     data = request.json or {}
 
     # Get user_id and plan_id from request
@@ -759,6 +759,7 @@ def get_all_users():
     finally:
         cur.close()
         conn.close()
+        
 
 
 

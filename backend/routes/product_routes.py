@@ -1,6 +1,8 @@
 from flask import Blueprint, request, jsonify, send_from_directory
 from database import get_connection
 import secrets, os
+import json
+from routes.auth_routes import decode_token
 
 product_bp = Blueprint("products", __name__)
 
@@ -37,59 +39,110 @@ def upload_image():
 
 @product_bp.post("/add_product")
 def add_product():
-    data = request.get_json()
-    user_id = data.get("user_id")
-    if not user_id:
-        return jsonify({"error": "user_id is required"}), 400
+    # ===== TOKEN AUTH (SAME AS ADD PLAN) =====
+    token = request.headers.get("Authorization")
+    if not token:
+        return jsonify({"error": "Token required"}), 401
 
-    name = data.get("productName")
+    token = token.replace("Bearer ", "").strip()
+    payload = decode_token(token)
+    if not payload:
+        return jsonify({"error": "Invalid or expired token"}), 401
+
+    user_id = payload["user_id"]
+
+    data = request.get_json() or {}
+
+    # ===== BASIC INFO =====
+    name = data.get("name")
     sku = data.get("sku")
+    variant_id = data.get("variant_id")
+    brand = data.get("brand")
     description = data.get("description")
+    image_url = data.get("image_url")
+
     amount = data.get("amount")
     stock = data.get("stock")
     gst = data.get("gst")
-    routines = data.get("routines")
-    image_url = data.get("image_url")
 
-    if not all([name, sku, description, amount, stock, gst, routines]):
-        return jsonify({"error": "All product fields are required"}), 400
+    # ===== NEW COLUMNS =====
+    major_usp = data.get("major_usp")
+    concerns = data.get("concerns")
+
+    product_types = data.get("product_types", [])
+    skin_types = data.get("skin_types", [])
+    gender = data.get("gender", [])
+    age = data.get("age")
+    time_session = data.get("time_session", [])
+    routine = data.get("routine")
+
+    if not all([name, sku, amount, stock, gst]):
+        return jsonify({"error": "Missing required fields"}), 400
 
     conn = get_connection()
     cur = conn.cursor()
 
     try:
-        # Get organization_id from user
-        cur.execute("SELECT organization_id FROM users WHERE id=%s", (user_id,))
+        # Get organization_id
+        cur.execute("SELECT organization_id FROM users WHERE id = %s", (user_id,))
         row = cur.fetchone()
         if not row:
             return jsonify({"error": "User not found"}), 404
 
         org_id = row[0]
 
-    
         query = """
-            INSERT INTO products 
-            (organization_id, name, sku, description, image_url, amount, available_stock, gst, routines, is_active)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, true)
+            INSERT INTO products (
+                organization_id,
+                name,
+                sku,
+                variant_id,
+                brand,
+                description,
+                image_url,
+                amount,
+                stock,
+                gst,
+                major_usp,
+                concerns,
+                product_types,
+                skin_types,
+                gender,
+                age,
+                time_session,
+                routine,
+                is_active
+            )
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,true)
             RETURNING id
         """
+
         values = (
             org_id,
             name,
             sku,
+            variant_id,
+            brand,
             description,
             image_url,
             amount,
             stock,
             gst,
-            routines
+            major_usp,
+            concerns,
+            json.dumps(product_types),
+            json.dumps(skin_types),
+            json.dumps(gender),
+            json.dumps(age),
+            json.dumps(time_session),
+            routine
         )
 
         cur.execute(query, values)
-        product_id = cur.fetchone()[0] 
+        product_id = cur.fetchone()[0]
         conn.commit()
 
-        return jsonify({"status": "success", "organizationId": org_id, "productId": product_id})
+        return jsonify({"status": "success", "product_id": product_id}), 201
 
     except Exception as e:
         conn.rollback()
@@ -102,44 +155,79 @@ def add_product():
 # GET PRODUCTS 
 @product_bp.route("/get_products", methods=["GET"])
 def get_products():
-    user_id = request.args.get("user_id")
-    if not user_id:
-        return jsonify({"error": "user_id is required"}), 400
+    # ===== TOKEN AUTH =====
+    token = request.headers.get("Authorization")
+    if not token:
+        return jsonify({"error": "Token required"}), 401
+
+    token = token.replace("Bearer ", "").strip()
+    payload = decode_token(token)
+    if not payload:
+        return jsonify({"error": "Invalid or expired token"}), 401
+
+    user_id = payload["user_id"]
 
     conn = get_connection()
     cur = conn.cursor()
 
     try:
-        # Get organization_id of user
-        cur.execute("SELECT organization_id FROM users WHERE id=%s", (user_id,))
+        cur.execute(
+            "SELECT organization_id FROM users WHERE id=%s",
+            (user_id,)
+        )
         row = cur.fetchone()
         if not row:
             return jsonify({"error": "User not found"}), 404
+
         org_id = row[0]
 
-        # Fetch only required fields
         cur.execute("""
-            SELECT id, sku, name, image_url, amount, available_stock, gst, routines, is_active
+            SELECT
+                id,
+                sku,
+                variant_id,
+                brand,
+                name,
+                image_url,
+                amount,
+                stock,
+                gst,
+                major_usp,
+                description,
+                concerns,
+                product_types,
+                skin_types,
+                gender,
+                age,
+                time_session,
+                routine,
+                is_active
             FROM products
             WHERE organization_id = %s
             ORDER BY name
         """, (org_id,))
 
-        products = []
         columns = [desc[0] for desc in cur.description]
-        for record in cur.fetchall():
-            product = dict(zip(columns, record))
-            products.append(product)
+        products = []
 
-        return jsonify({"products": products})
+        for row in cur.fetchall():
+            p = dict(zip(columns, row))
+            p["product_types"] = p["product_types"] or []
+            p["skin_types"] = p["skin_types"] or []
+            p["gender"] = p["gender"] or []
+            p["time_session"] = p["time_session"] or []
+            p["age"] = p["age"] or ""
+            products.append(p)
+
+        return jsonify({"products": products}), 200
 
     except Exception as e:
-        print("Error fetching products:", e)
         return jsonify({"error": str(e)}), 500
 
     finally:
         cur.close()
         conn.close()
+
 
 
 
@@ -168,56 +256,82 @@ def delete_product(id):
 def update_product(product_id):
     data = request.get_json() or {}
 
-    name = data.get("name")
-    sku = data.get("sku")
-    description = data.get("description")
-    amount = data.get("amount")
-    stock = data.get("available_stock")
-    gst = data.get("gst")
-    routines = data.get("routines")
-    image_url = data.get("image_url")
-
-    if not all([name, sku, description, amount, stock, gst, routines]):
-        return jsonify({"error": "Required fields missing"}), 400
-
     conn = get_connection()
     cur = conn.cursor()
 
     try:
-        cur.execute("""
-            UPDATE products
-            SET 
+        query = """
+            UPDATE products SET
                 name = %s,
                 sku = %s,
+                variant_id = %s,
+                brand = %s,
                 description = %s,
                 image_url = %s,
                 amount = %s,
-                available_stock = %s,
+                stock = %s,
                 gst = %s,
-                routines = %s
+                major_usp = %s,
+                concerns = %s,
+                product_types = %s,
+                skin_types = %s,
+                gender = %s,
+                age = %s,
+                time_session = %s,
+                routine = %s
             WHERE id = %s
-        """, (
-            name,
-            sku,
-            description,
-            image_url,
-            amount,
-            stock,
-            gst,
-            routines,
-            product_id
-        ))
+        """
 
+        values = (
+            data.get("name"),
+            data.get("sku"),
+            data.get("variant_id"),
+            data.get("brand"),
+            data.get("description"),
+            data.get("image_url"),
+            data.get("amount"),
+            data.get("stock"),
+            data.get("gst"),
+            data.get("major_usp"),
+            data.get("concerns"),
+            json.dumps(data.get("product_types", [])),
+            json.dumps(data.get("skin_types", [])),
+            json.dumps(data.get("gender", [])),
+            json.dumps(data.get("age")),
+            json.dumps(data.get("time_session", [])),
+            data.get("routine"),
+            product_id
+        )
+
+        cur.execute(query, values)
         conn.commit()
+
         return jsonify({"message": "Product updated successfully"}), 200
 
     except Exception as e:
         conn.rollback()
-        print("Error updating product:", e)
         return jsonify({"error": str(e)}), 500
 
     finally:
         cur.close()
         conn.close()
+
+
+@product_bp.get("/product_types")
+def get_product_types():
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT name FROM product_types")
+    rows = cur.fetchall()
+    return jsonify([row[0] for row in rows])
+
+@product_bp.get("/skin_types")
+def get_skin_types():
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT name FROM skin_types")
+    rows = cur.fetchall()
+    return jsonify([row[0] for row in rows])
+
 
 

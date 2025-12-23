@@ -185,9 +185,16 @@ const SignupForm = ({
   errors,
   setSignupData,
   setSignupErrors,
-  setErrorMessage
+  setErrorMessage,
+  loading
 }) => (
   <>
+  {loading && (
+  <div className="fixed inset-0 flex items-center justify-center bg-black/30 z-50">
+    <div className="w-16 h-16 border-4 border-t-[#08A882] border-gray-200 rounded-full animate-spin"></div>
+  </div>
+)}
+
     {showPopup && (
       <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-xl z-50">
         <div className="bg-white p-6 rounded-xl shadow-xl w-[90%] max-w-md text-center relative">
@@ -401,12 +408,16 @@ function LoginSign() {
   /* ----------------------------------
      Signup Submit
   ---------------------------------- */
+const [loading, setLoading] = useState(false);
+
+
   const handleSignup = async (e) => {
     e.preventDefault();
 
     if (signupData.password !== signupData.confirmPassword)
       return setErrorMessage("Passwords do not match");
-
+    setLoading(true); // start loader
+    setErrorMessage("");
     try {
       const res = await api("/signup", {
         method: "POST",
@@ -421,7 +432,9 @@ function LoginSign() {
     } catch (err) {
       console.error(err);
       setErrorMessage("Something went wrong");
-    }
+    }finally {
+    setLoading(false); // stop loader
+  }
   };
 
   /* ----------------------------------
@@ -549,6 +562,7 @@ function LoginSign() {
               setSignupData={setSignupData}  
               setSignupErrors={setSignupErrors} 
               setErrorMessage={setErrorMessage}
+              loading={loading}  
             />
           )}
         </div>

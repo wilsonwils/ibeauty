@@ -1,35 +1,195 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api, API_BASE } from "../utils/api";
 
-const Addproduct = () => {
+/* ================= MULTI SELECT DROPDOWN ================= */
+const MultiSelectDropdown = ({ options, selectedOptions, setSelectedOptions, label }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const toggleOption = (option) => {
+    setSelectedOptions(
+      selectedOptions.includes(option)
+        ? selectedOptions.filter((o) => o !== option)
+        : [...selectedOptions, option]
+    );
+  };
+
+  return (
+    <div className="relative w-full" ref={dropdownRef}>
+      <label className="block text-sm font-medium mb-1">{label}</label>
+      <div
+        className="border border-gray-300 rounded px-3 py-2 min-h-[42px] cursor-pointer flex justify-between items-center"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <span className="text-sm truncate">
+          {selectedOptions.length ? selectedOptions.join(", ") : "Select"}
+        </span>
+        <svg className={`w-4 h-4 transition ${isOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </div>
+      {isOpen && (
+        <div className="absolute z-20 w-full bg-white border rounded mt-1 max-h-56 overflow-auto shadow">
+          {options.map((option) => (
+            <label key={option} className="flex items-center px-3 py-2 text-sm hover:bg-gray-100 cursor-pointer">
+              <input
+                type="checkbox"
+                className="mr-2"
+                checked={selectedOptions.includes(option)}
+                onChange={() => toggleOption(option)}
+              />
+              {option}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ================= SINGLE SELECT DROPDOWN (Routine) ================= */
+const SingleSelectDropdown = ({ options, selectedOption, setSelectedOption, label }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selectOption = (option) => {
+    setSelectedOption(option);
+    setIsOpen(false);
+  };
+
+  return (
+    <div className="relative w-full" ref={dropdownRef}>
+      <label className="block text-sm font-medium mb-1">{label}</label>
+      <div
+        className="border border-gray-300 rounded px-3 py-2 min-h-[42px] cursor-pointer flex justify-between items-center"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <span className="text-sm">{selectedOption || "Select"}</span>
+        <svg className={`w-4 h-4 transition ${isOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </div>
+      {isOpen && (
+        <div className="absolute z-20 w-full bg-white border rounded mt-1 max-h-56 overflow-auto shadow">
+          {options.map((option) => (
+            <div
+              key={option}
+              className="px-3 py-2 text-sm hover:bg-gray-100 cursor-pointer"
+              onClick={() => selectOption(option)}
+            >
+              {option}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ================= ADD PRODUCT ================= */
+const AddProduct = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const product = location.state?.product;
 
-  const [productName, setProductName] = useState("");
+  const token = localStorage.getItem("AUTH_TOKEN"); // ✅ use token
+
   const [sku, setSku] = useState("");
-  const [description, setDescription] = useState("");
+  const [variantId, setVariantId] = useState("");
+  const [brand, setBrand] = useState("");
+  const [productName, setProductName] = useState("");
+
   const [amount, setAmount] = useState("");
   const [stock, setStock] = useState("");
   const [gst, setGst] = useState("");
-  const [routines, setRoutines] = useState("");
+
+  const [majorUsp, setMajorUsp] = useState("");
+  const [description, setDescription] = useState("");
+  const [concerns, setConcerns] = useState("");
+
   const [image, setImage] = useState(null);
   const [preview, setPreview] = useState(null);
 
-  // Pre-fill form when editing
+  const [productTypes, setProductTypes] = useState([]);
+  const [skinTypes, setSkinTypes] = useState([]);
+
+  const [selectedProductTypes, setSelectedProductTypes] = useState([]);
+  const [selectedSkinTypes, setSelectedSkinTypes] = useState([]);
+  const [selectedGender, setSelectedGender] = useState([]);
+  const [selectedAge, setSelectedAge] = useState("");
+  const [selectedTime, setSelectedTime] = useState([]);
+  const [selectedRoutine, setSelectedRoutine] = useState("");
+
+  const genderOptions = ["Male", "Female", "Transgender"];
+  const timeOptions = ["AM", "PM"];
+  const routineOptions = ["Morning", "Evening"];
+
+  /* ===== PREFILL EDIT ===== */
   useEffect(() => {
     if (product) {
-      setProductName(product.name || ""); 
       setSku(product.sku || "");
-      setDescription(product.description || "");
+      setVariantId(product.variant_id || "");
+      setBrand(product.brand || "");
+      setProductName(product.name || "");
       setAmount(product.amount || "");
-      setStock(product.available_stock || product.stock || "");
+      setStock(product.stock || "");
       setGst(product.gst || "");
-      setRoutines(product.routines || "");
+      setMajorUsp(product.major_usp || "");
+      setDescription(product.description || "");
+      setConcerns(product.concerns || "");
       setPreview(product.image_url ? `${API_BASE}${product.image_url}` : null);
+
+      setSelectedProductTypes(product.product_types || []);
+      setSelectedSkinTypes(product.skin_types || []);
+      setSelectedGender(product.gender || []);
+      setSelectedAge(product.age || "");
+      setSelectedTime(product.time_session || []);
+      setSelectedRoutine(product.routine || "");
     }
   }, [product]);
+
+  /* ===== FETCH DROPDOWNS ===== */
+  useEffect(() => {
+    const fetchOptions = async () => {
+      if (!token) return alert("Authorization token missing!");
+      try {
+        const ptRes = await fetch(`${API_BASE}/product_types`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const stRes = await fetch(`${API_BASE}/skin_types`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (ptRes.ok) setProductTypes(await ptRes.json());
+        if (stRes.ok) setSkinTypes(await stRes.json());
+      } catch (err) {
+        console.error(err);
+        alert("Failed to fetch dropdown options");
+      }
+    };
+    fetchOptions();
+  }, [token]);
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
@@ -38,209 +198,165 @@ const Addproduct = () => {
   };
 
   const uploadImage = async () => {
-    if (!image) return product?.image_url || null; // keep old image if editing
-
-    try {
-      const formData = new FormData();
-      formData.append("image", image);
-
-      const res = await fetch(`${API_BASE}/upload_image`, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        console.error("Image upload error:", err);
-        return null;
-      }
-
-      const data = await res.json();
-      return data.imageUrl;
-    } catch (err) {
-      console.error("Image upload failed:", err);
-      return null;
-    }
+    if (!image) return product?.image_url || null;
+    const formData = new FormData();
+    formData.append("image", image);
+    const res = await fetch(`${API_BASE}/upload_image`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+    const data = await res.json();
+    return data.imageUrl;
   };
 
   const handleSubmit = async (e) => {
-  e.preventDefault();
+    e.preventDefault();
+    if (!token) return alert("Authorization token missing!");
 
-  try {
     const imageUrl = await uploadImage();
 
-    const body = product
-      ? {
-          // Update product
-          name: productName,
-          sku,
-          description,
-          amount,
-          available_stock: stock,
-          gst,
-          routines,
-          image_url: imageUrl,
-        }
-      : {
-          // Add product
-          user_id: localStorage.getItem("userId"),
-          productName: productName,
-          sku,
-          description,
-          amount,
-          stock,
-          gst,
-          routines,
-          image_url: imageUrl,
-        };
+    const body = {
+      sku,
+      variant_id: variantId,
+      brand,
+      name: productName,
+      amount,
+      stock,
+      gst,
+      major_usp: majorUsp,
+      description,
+      concerns,
+      image_url: imageUrl,
+      product_types: selectedProductTypes,
+      skin_types: selectedSkinTypes,
+      gender: selectedGender,
+      age: selectedAge,
+      time_session: selectedTime,
+      routine: selectedRoutine,
+      user_id: localStorage.getItem("userId"),
+    };
 
-    const endpoint = product ? `/update_product/${product.id}` : "/add_product";
+    const endpoint = product ? `${API_BASE}/update_product/${product.id}` : `${API_BASE}/add_product`;
     const method = product ? "PUT" : "POST";
 
-    const res = await api(endpoint, {
-      method,
-      body: JSON.stringify(body),
-    });
+    try {
+      const res = await fetch(endpoint, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+      });
 
-    const data = await res.json();
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to submit product");
 
-    if (res.ok) {
-
-      navigate("/i-beauty/productlist"); 
-    } else {
-      alert(data.error || "Failed to submit product");
+      alert("Product saved successfully!");
+      navigate("/i-beauty/productlist");
+    } catch (err) {
+      console.error(err);
+      alert(err.message);
     }
-  } catch (err) {
-    console.error(err);
-    alert("Something went wrong!");
-  }
-};
-
-
-
-  return (
-    <div className="bg-white p-6 rounded shadow-md max-w-6xl mx-auto">
+  };  return (
+    <div className="bg-white p-6 rounded shadow max-w-6xl mx-auto">
       <h1 className="text-2xl font-semibold mb-6">
         {product ? "Edit Product" : "Add Product"}
       </h1>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-        {/* First row */}
-        <div className="flex flex-wrap gap-4">
-          <div className="flex-1 min-w-[200px]">
-            <label className="block text-gray-700 mb-1">Product Name</label>
-            <input
-              type="text"
-              value={productName}
-              onChange={(e) => setProductName(e.target.value)}
-              className="w-full border p-2 rounded"
-              required
-            />
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+
+        {/* ROW 1 */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">SKU</label>
+            <input className="border p-2 rounded w-full" value={sku} onChange={(e) => setSku(e.target.value)} />
           </div>
-
-          <div className="flex-1 min-w-[200px]">
-            <label className="block text-gray-700 mb-1">SKU</label>
-            <input
-              type="text"
-              value={sku}
-              onChange={(e) => setSku(e.target.value)}
-              className="w-full border p-2 rounded"
-              required
-            />
+          <div>
+            <label className="block font-medium text-sm mb-1">Variant ID</label>
+            <input className="border p-2 rounded w-full" value={variantId} onChange={(e) => setVariantId(e.target.value)} />
           </div>
-
-<div className="flex-1 min-w-[200px]">
-  <label className="block text-gray-700 mb-1">Description</label>
-  <textarea
-    value={description}
-    onChange={(e) => setDescription(e.target.value)}
-    className="w-full border p-2 rounded"
-    rows={4} 
-    placeholder="Enter description here"
-  />
-</div>
-
-        </div>
-
-        {/* Second row */}
-        <div className="flex flex-wrap gap-4">
-          <div className="flex-1 min-w-[200px]">
-            <label className="block text-gray-700 mb-1">Amount</label>
-            <input
-              type="number"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              className="w-full border p-2 rounded"
-              required
-            />
+          <div>
+            <label className="block font-medium text-sm mb-1">Brand</label>
+            <input className="border p-2 rounded w-full" value={brand} onChange={(e) => setBrand(e.target.value)} />
           </div>
-
-          <div className="flex-1 min-w-[200px]">
-            <label className="block text-gray-700 mb-1">Stock</label>
-            <input
-              type="number"
-              value={stock}
-              onChange={(e) => setStock(e.target.value)}
-              className="w-full border p-2 rounded"
-              required
-            />
-          </div>
-
-          <div className="flex-1 min-w-[200px]">
-            <label className="block text-gray-700 mb-1">GST (%)</label>
-            <input
-              type="number"
-              value={gst}
-              onChange={(e) => setGst(e.target.value)}
-              className="w-full border p-2 rounded"
-            />
+          <div>
+            <label className="block font-medium text-sm mb-1">Product Name</label>
+            <input className="border p-2 rounded w-full" value={productName} onChange={(e) => setProductName(e.target.value)} />
           </div>
         </div>
 
-        {/* Routines */}
-        <div className="flex flex-wrap gap-4">
-          <div className="flex-1 min-w-[200px]">
-            <label className="block text-gray-700 mb-1">Routines</label>
-            <select
-              value={routines}
-              onChange={(e) => setRoutines(e.target.value)}
-              className="w-full border p-2 rounded"
-            >
-              <option value="">Select Routine</option>
-              <option value="Morning">Morning</option>
-              <option value="Evening">Evening</option>
-            </select>
+        {/* ROW 2 */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block font-medium text-sm mb-1">Amount</label>
+            <input className="border p-2 rounded w-full" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          </div>
+          <div>
+            <label className="block font-medium text-sm mb-1">Stock</label>
+            <input className="border p-2 rounded w-full" value={stock} onChange={(e) => setStock(e.target.value)} />
+          </div>
+          <div>
+            <label className="block font-medium text-sm mb-1">GST %</label>
+            <input className="border p-2 rounded w-full" value={gst} onChange={(e) => setGst(e.target.value)} />
           </div>
         </div>
 
-        {/* Image Upload */}
-        <div className="flex flex-col gap-2">
-          <label className="block text-gray-700 mb-1">Upload Product Image</label>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleImageChange}
-            className="border p-2 rounded w-full max-w-sm"
-          />
-          {preview && (
-            <div className="mt-3">
-              <img
-                src={preview}
-                alt="Preview"
-                className="w-32 h-32 object-cover rounded border"
-              />
+        {/* ROW 3 */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block font-medium text-sm mb-1">Major USP</label>
+            <textarea className="border p-2 rounded w-full min-h-[120px]" value={majorUsp} onChange={(e) => setMajorUsp(e.target.value)} />
+          </div>
+          <div>
+            <label className="block font-medium text-sm mb-1">Description</label>
+            <textarea className="border p-2 rounded w-full min-h-[120px]" value={description} onChange={(e) => setDescription(e.target.value)} />
+          </div>
+        </div>
+
+        {/* ROW 4 */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block font-medium text-sm mb-1">Upload Image</label>
+            <div className="border border-dashed rounded p-3">
+              <input type="file" onChange={handleImageChange} />
+              {preview && <img src={preview} alt="preview" className="mt-2 h-24 rounded object-cover" />}
             </div>
-          )}
+          </div>
+
+          <MultiSelectDropdown label="Product Types" options={productTypes} selectedOptions={selectedProductTypes} setSelectedOptions={setSelectedProductTypes} />
+          <MultiSelectDropdown label="Skin Types" options={skinTypes} selectedOptions={selectedSkinTypes} setSelectedOptions={setSelectedSkinTypes} />
         </div>
 
-        <button
-          type="submit"
-          className="bg-[#00bcd4] text-white px-4 py-2 rounded hover:bg-[#00a2b2] w-fit"
-        >
-          {product ? "Update Product" : "Add Product"}
-        </button>
+        {/* ROW 5 */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <SingleSelectDropdown label="Routine" options={routineOptions} selectedOption={selectedRoutine} setSelectedOption={setSelectedRoutine} />
+          <MultiSelectDropdown label="Gender" options={genderOptions} selectedOptions={selectedGender} setSelectedOptions={setSelectedGender} />
+          <div>
+            <label className="block font-medium text-sm mb-1">Age</label>
+            <input className="border p-2 rounded w-full" value={selectedAge} onChange={(e) => setSelectedAge(e.target.value)} />
+          </div>
+        </div>
+
+        {/* ROW 6 */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block font-medium text-sm mb-1">Concerns</label>
+            <textarea className="border p-4 rounded w-full min-h-[120px]" value={concerns} onChange={(e) => setConcerns(e.target.value)} />
+          </div>
+          <MultiSelectDropdown label="Time / Session" options={timeOptions} selectedOptions={selectedTime} setSelectedOptions={setSelectedTime} />
+
+        </div>
+
+        {/* BUTTON */}
+        <div className="flex justify-end">
+          <button className="bg-[#00bcd4] text-white px-6 py-2 rounded">{product ? "Update Product" : "Add Product"}</button>
+        </div>
+
       </form>
     </div>
   );
 };
 
-export default Addproduct;
+export default AddProduct;

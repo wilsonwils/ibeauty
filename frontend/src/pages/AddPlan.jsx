@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { MODULES, PLAN_SIGNATURES } from "../config/module";
 
 const PLANS = [
@@ -13,6 +14,8 @@ const AddPlan = () => {
   const [selectedModules, setSelectedModules] = useState({});
   const [loading, setLoading] = useState(false);
   const [fetchingUsers, setFetchingUsers] = useState(true);
+
+  const navigate = useNavigate();
 
   // Fetch users from backend
   useEffect(() => {
@@ -29,7 +32,6 @@ const AddPlan = () => {
         if (!res.ok) throw new Error(data.error || "Failed to fetch users");
 
         setUsers(data.users || []);
-
         if (data.users.length > 0) setSelectedUser(data.users[0]);
       } catch (err) {
         console.error(err);
@@ -65,15 +67,12 @@ const AddPlan = () => {
     const token = localStorage.getItem("AUTH_TOKEN");
     if (!token) return alert("Authorization token missing!");
 
-    // Prepare payload with fallback org_id
     const payload = {
       user_id: selectedUser.id,
-      organization_id: selectedUser.organization_id || 123, // fallback if org_id missing
+      organization_id: selectedUser.organization_id || 123,
       plan_id: planId,
       customized_module_id: modules,
     };
-
-    console.log("Sending payload:", payload);
 
     setLoading(true);
     try {
@@ -90,7 +89,10 @@ const AddPlan = () => {
       if (!res.ok) throw new Error(data.error || "Failed to add plan");
 
       alert(`Plan "${planName}" added successfully!`);
-      console.log("Added plan data:", data);
+
+      // ✅ Redirect to permissions page
+      navigate("/i-beauty/organization-permission");
+
     } catch (err) {
       console.error(err);
       alert(`Error: ${err.message}`);
@@ -105,10 +107,6 @@ const AddPlan = () => {
     <div className="max-w-6xl mx-auto p-6 space-y-6">
       <h2 className="text-2xl font-bold mb-4">Add Plan</h2>
 
-  
-
-
-      {/* Plan cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {PLANS.map((plan) => {
           const defaultModules = plan.modules;
