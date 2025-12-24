@@ -169,7 +169,7 @@ def save_questionaire():
             # If skip mode, clear any previously saved answer
             if skip:
                 selected_options = [] if isinstance(selected_options, list) else None
-                key = "no"  # mark as skipped
+                key = "null"  # mark as skipped
 
             # Check if a row already exists
             cur.execute("""
@@ -305,6 +305,7 @@ def save_capture_page():
 
 @flow_bp.post("/save_contact_page")
 def save_contact_page():
+    # ===== AUTH =====
     auth = request.headers.get("Authorization")
     if not auth:
         return jsonify({"error": "Token required"}), 401
@@ -317,6 +318,7 @@ def save_contact_page():
     user_id = payload["user_id"]
     organization_id = payload["organization_id"]
 
+    # ===== REQUEST DATA =====
     data = request.get_json() or {}
     flow_id = data.get("flow_id")
     skip = data.get("skip") is True
@@ -324,14 +326,14 @@ def save_contact_page():
     if not flow_id:
         return jsonify({"error": "flow_id is required"}), 400
 
-    fields = ["name", "phone", "whatsapp", "email"]
+    fields = ["name", "phone", "whatsapp", "email", "instagram"]  # make sure Instagram is here
 
-   
+    # ===== SELECTED FIELDS =====
     if skip:
         selected_fields = []
     else:
-        selected_fields = [f for f in fields if data.get(f)]
-
+        # Only keep fields that are truthy (selected)
+        selected_fields = [field for field in fields if data.get(field)]
         if not selected_fields:
             return jsonify({"error": "Select at least one option"}), 400
 
@@ -339,40 +341,38 @@ def save_contact_page():
     cur = conn.cursor()
 
     try:
+        # ===== VALIDATE FLOW =====
         cur.execute("""
             SELECT id FROM flows
-            WHERE id=%s AND organization_id=%s
+            WHERE id = %s AND organization_id = %s
         """, (flow_id, organization_id))
 
         if not cur.fetchone():
             return jsonify({"error": "Invalid flow or unauthorized"}), 403
 
+        # ===== CHECK EXISTING RECORD =====
         cur.execute("""
             SELECT id FROM organization_contact_input
-            WHERE flow_id=%s AND user_id=%s
+            WHERE flow_id = %s AND user_id = %s
         """, (flow_id, user_id))
 
         existing = cur.fetchone()
+        contact_info_json = json.dumps(selected_fields)
 
         if existing:
             contact_id = existing[0]
             cur.execute("""
                 UPDATE organization_contact_input
-                SET contact_information=%s
-                WHERE id=%s
-            """, (json.dumps(selected_fields), contact_id))
+                SET contact_information = %s
+                WHERE id = %s
+            """, (contact_info_json, contact_id))
         else:
             cur.execute("""
                 INSERT INTO organization_contact_input
                 (flow_id, user_id, organization_id, contact_information)
                 VALUES (%s, %s, %s, %s)
                 RETURNING id
-            """, (
-                flow_id,
-                user_id,
-                organization_id,
-                json.dumps(selected_fields)
-            ))
+            """, (flow_id, user_id, organization_id, contact_info_json))
             contact_id = cur.fetchone()[0]
 
         conn.commit()
@@ -382,6 +382,7 @@ def save_contact_page():
             "id": contact_id,
             "flow_id": flow_id,
             "organization_id": organization_id,
+            "contact_information": selected_fields,
             "skip": skip
         }), 201
 
@@ -392,6 +393,8 @@ def save_contact_page():
     finally:
         cur.close()
         conn.close()
+
+
 
 
 @flow_bp.post("/save_segmentation")

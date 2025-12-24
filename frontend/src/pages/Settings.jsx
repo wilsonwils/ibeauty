@@ -11,12 +11,13 @@ const PLAN_ID_MAP = {
 
 /* ================= PLANS ================= */
 const PLANS = [
+
   { id: 1, name: "standard", modules: PLAN_SIGNATURES.standard },
   { id: 2, name: "Pro", modules: PLAN_SIGNATURES.Pro },
   { id: 3, name: "Premium", modules: PLAN_SIGNATURES.Premium },
 ];
 
-const SettingsPage = () => {
+const Settings = () => {
   const [currentPlan, setCurrentPlan] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -142,4 +143,4 @@ const SettingsPage = () => {
   );
 };
 
-export default SettingsPage;
+export default Settings;

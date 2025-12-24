@@ -2,11 +2,13 @@ import React, { useState, useEffect } from "react";
 import { API_BASE } from "../utils/api";
 
 const questionaireFields = {
-  Gender: { type: "multi-select", options: ["Male", "Female", "Transgender"], multi: true },
+  Gender: {
+    type: "multi-select",
+    options: ["Male", "Female", "Transgender"],
+    multi: true,
+  },
   Age: { type: "number", placeholder: "Enter your minimum age" },
   "Skin Type": { type: "text", placeholder: "Enter your skin type" },
-  Name: { noInput: true },
-  "Phone Number": { noInput: true },
 };
 
 const Questionaire = ({ data, setData, setSaveFunction }) => {
@@ -14,7 +16,9 @@ const Questionaire = ({ data, setData, setSaveFunction }) => {
   const [answers, setAnswers] = useState({
     ...data.answers,
     Gender: Array.isArray(data.answers?.Gender) ? data.answers.Gender : [],
-    "Skin Type": Array.isArray(data.answers?.["Skin Type"]) ? data.answers["Skin Type"] : [],
+    "Skin Type": Array.isArray(data.answers?.["Skin Type"])
+      ? data.answers["Skin Type"]
+      : [],
   });
   const [required, setRequired] = useState(data.required || {});
   const [skinInput, setSkinInput] = useState("");
@@ -29,7 +33,7 @@ const Questionaire = ({ data, setData, setSaveFunction }) => {
     setTimeout(() => setErrorMsg(""), 3000);
   };
 
-  // Save function
+  /* ================= SAVE FUNCTION ================= */
   useEffect(() => {
     const saveQuestionaire = async (flowId, _stepData, options = {}) => {
       const user_id = localStorage.getItem("userId");
@@ -37,44 +41,52 @@ const Questionaire = ({ data, setData, setSaveFunction }) => {
       if (!flowId || !user_id || !token) return false;
 
       const skip = options?.skip === true;
-      const dataToSave = skip ? {} : _stepData || { questionaire, answers, required };
+      const dataToSave = skip
+        ? {}
+        : _stepData || { questionaire, answers, required };
 
-      // === Validation 1: Yes/No selected ===
+      // Validation 1: Yes/No selected
       const unselectedFields = Object.keys(questionaireFields).filter(
         (field) => dataToSave.questionaire?.[field] === undefined
       );
+
       if (unselectedFields.length > 0 && !skip) {
         showError("Please select Yes or No for all questions");
         return false;
       }
 
-      // === Validation 2: Input required when Yes is selected ===
-      const emptyInputFields = Object.keys(questionaireFields).filter((field) => {
-        const isYes = dataToSave.questionaire?.[field] === true;
-        if (!isYes) return false; // only validate fields with Yes selected
+      // Validation 2: Input required when Yes is selected
+      const emptyInputFields = Object.keys(questionaireFields).filter(
+        (field) => {
+          const isYes = dataToSave.questionaire?.[field] === true;
+          if (!isYes) return false;
 
-        const config = questionaireFields[field];
-        if (config.noInput) return false; // skip fields without input
+          const config = questionaireFields[field];
+          const value = dataToSave.answers?.[field];
 
-        const value = dataToSave.answers?.[field];
+          if (config.multi && Array.isArray(value) && value.length === 0)
+            return true;
+          if (!config.multi && (!value || value.toString().trim() === ""))
+            return true;
 
-        if (config.multi && Array.isArray(value) && value.length === 0) return true;
-        if (!config.multi && (!value || value.toString().trim() === "")) return true;
-
-        return false;
-      });
+          return false;
+        }
+      );
 
       if (emptyInputFields.length > 0 && !skip) {
-        showError(`Please select or enter value for: ${emptyInputFields.join(", ")}`);
+        showError(
+          `Please select or enter value for: ${emptyInputFields.join(", ")}`
+        );
         return false;
       }
 
-     
       const fields = {};
       Object.keys(questionaireFields).forEach((field) => {
         fields[field] = {
           yes_no: dataToSave.questionaire?.[field] ? "yes" : "no",
-          value: dataToSave.answers?.[field] || (questionaireFields[field].multi ? [] : null),
+          value:
+            dataToSave.answers?.[field] ||
+            (questionaireFields[field].multi ? [] : null),
           required: dataToSave.required?.[field] || false,
           type: questionaireFields[field].type || "yes_no",
           options: questionaireFields[field].options || null,
@@ -113,6 +125,8 @@ const Questionaire = ({ data, setData, setSaveFunction }) => {
     setSaveFunction(() => saveQuestionaire);
   }, [setSaveFunction, questionaire, answers, required]);
 
+  /* ================= HANDLERS ================= */
+
   const toggleGenderOption = (opt) => {
     setAnswers((prev) => ({
       ...prev,
@@ -141,17 +155,13 @@ const Questionaire = ({ data, setData, setSaveFunction }) => {
   const handleNoClick = (field) => {
     setQuestionaire((p) => ({ ...p, [field]: false }));
     setRequired((p) => ({ ...p, [field]: false }));
-
     setAnswers((prev) => ({
       ...prev,
-      [field]:
-        field === "Skin Type"
-          ? []
-          : questionaireFields[field]?.multi
-          ? []
-          : "",
+      [field]: questionaireFields[field]?.multi ? [] : "",
     }));
   };
+
+  /* ================= UI ================= */
 
   return (
     <div className="flex flex-col gap-4 p-4 border border-gray-300 rounded mt-4 relative">
@@ -162,14 +172,12 @@ const Questionaire = ({ data, setData, setSaveFunction }) => {
           </div>
         </div>
       )}
+
       <h2 className="font-semibold text-lg mb-3">Questionaire</h2>
-
-
-
 
       {Object.keys(questionaireFields).map((field) => {
         const config = questionaireFields[field];
-        const showInput = questionaire[field] && !config.noInput;
+        const showInput = questionaire[field];
 
         return (
           <div key={field} className="flex flex-col gap-2">
@@ -177,9 +185,13 @@ const Questionaire = ({ data, setData, setSaveFunction }) => {
               <span className="font-medium">{field}</span>
               <div className="flex gap-3 items-center">
                 <button
-                  onClick={() => setQuestionaire((p) => ({ ...p, [field]: true }))}
+                  onClick={() =>
+                    setQuestionaire((p) => ({ ...p, [field]: true }))
+                  }
                   className={`px-3 py-1 rounded ${
-                    questionaire[field] ? "bg-[#01bcd5] text-white" : "bg-gray-300"
+                    questionaire[field]
+                      ? "bg-[#01bcd5] text-white"
+                      : "bg-gray-300"
                   }`}
                 >
                   Yes
@@ -197,7 +209,9 @@ const Questionaire = ({ data, setData, setSaveFunction }) => {
                 <input
                   type="checkbox"
                   checked={required[field] || false}
-                  onChange={() => setRequired((p) => ({ ...p, [field]: !p[field] }))}
+                  onChange={() =>
+                    setRequired((p) => ({ ...p, [field]: !p[field] }))
+                  }
                   title="Required"
                 />
               </div>
@@ -236,21 +250,20 @@ const Questionaire = ({ data, setData, setSaveFunction }) => {
                       </button>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      {Array.isArray(answers["Skin Type"]) &&
-                        answers["Skin Type"].map((type, index) => (
-                          <span
-                            key={index}
-                            className="px-3 py-1 bg-gray-200 rounded flex items-center gap-2"
+                      {answers["Skin Type"]?.map((type, index) => (
+                        <span
+                          key={index}
+                          className="px-3 py-1 bg-gray-200 rounded flex items-center gap-2"
+                        >
+                          {type}
+                          <button
+                            onClick={() => removeSkinType(index)}
+                            className="text-red-500 font-bold"
                           >
-                            {type}
-                            <button
-                              onClick={() => removeSkinType(index)}
-                              className="text-red-500 font-bold"
-                            >
-                              ×
-                            </button>
-                          </span>
-                        ))}
+                            ×
+                          </button>
+                        </span>
+                      ))}
                     </div>
                   </>
                 ) : (
@@ -258,7 +271,12 @@ const Questionaire = ({ data, setData, setSaveFunction }) => {
                     type={config.type}
                     placeholder={config.placeholder}
                     value={answers[field] || ""}
-                    onChange={(e) => setAnswers((p) => ({ ...p, [field]: e.target.value }))}
+                    onChange={(e) =>
+                      setAnswers((p) => ({
+                        ...p,
+                        [field]: e.target.value,
+                      }))
+                    }
                     className="border px-3 py-2 rounded w-full"
                   />
                 )}

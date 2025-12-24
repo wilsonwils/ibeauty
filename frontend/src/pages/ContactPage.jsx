@@ -8,6 +8,7 @@ const ContactPage = ({ data, setData, setSaveFunction }) => {
     phone: data?.phone || false,
     whatsapp: data?.whatsapp || false,
     email: data?.email || false,
+    instagram: data?.instagram || false, // ✅ added
   });
 
   const [errorMsg, setErrorMsg] = useState("");
@@ -20,8 +21,9 @@ const ContactPage = ({ data, setData, setSaveFunction }) => {
       phone: data.phone ?? false,
       whatsapp: data.whatsapp ?? false,
       email: data.email ?? false,
+      instagram: data.instagram ?? false, // ✅ added
     });
-  }, []); 
+  }, []);
 
   // Keep parent data in sync when selected changes
   useEffect(() => {
@@ -31,7 +33,6 @@ const ContactPage = ({ data, setData, setSaveFunction }) => {
     }));
   }, [selected, setData]);
 
-  
   const showError = (msg) => {
     setErrorMsg(msg);
     setTimeout(() => setErrorMsg(""), 3000);
@@ -46,12 +47,18 @@ const ContactPage = ({ data, setData, setSaveFunction }) => {
 
       const skip = options.skip === true;
 
-     
-      if (!skip && !selected.name && !selected.phone && !selected.whatsapp && !selected.email) {
+      // ✅ validation updated
+      if (
+        !skip &&
+        !selected.name &&
+        !selected.phone &&
+        !selected.whatsapp &&
+        !selected.email &&
+        !selected.instagram
+      ) {
         showError("Select at least one option");
         return false;
       }
-
 
       const payload = skip
         ? {
@@ -59,12 +66,14 @@ const ContactPage = ({ data, setData, setSaveFunction }) => {
             phone: null,
             whatsapp: null,
             email: null,
+            instagram: null, // ✅ added
           }
         : {
             name: selected.name || false,
             phone: selected.phone || false,
             whatsapp: selected.whatsapp || false,
             email: selected.email || false,
+            instagram: selected.instagram || false, // ✅ added
           };
 
       try {
@@ -78,7 +87,7 @@ const ContactPage = ({ data, setData, setSaveFunction }) => {
             flow_id: flowId,
             user_id,
             ...payload,
-            skip, 
+            skip,
           }),
         });
 
@@ -126,7 +135,6 @@ const ContactPage = ({ data, setData, setSaveFunction }) => {
         </div>
       )}
 
-
       <div className="flex items-center gap-8 flex-wrap">
         <label className="flex items-center gap-2">
           <input
@@ -162,6 +170,16 @@ const ContactPage = ({ data, setData, setSaveFunction }) => {
             onChange={() => toggle("email")}
           />
           <span className="font-semibold">Email</span>
+        </label>
+
+        {/* ✅ Instagram ID */}
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={selected.instagram}
+            onChange={() => toggle("instagram")}
+          />
+          <span className="font-semibold">Instagram ID</span>
         </label>
       </div>
     </div>

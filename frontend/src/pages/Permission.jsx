@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom"; // <-- for navigation
+import { useNavigate } from "react-router-dom";
 import { API_BASE } from "../utils/api";
 import { MODULES, PLAN_SIGNATURES } from "../config/module";
 
@@ -133,6 +133,7 @@ const Permission = () => {
       {/* ========== MAIN TABLE ========== */}
       <div className="bg-white p-6 rounded shadow-md max-w-6xl mx-auto">
         <h2 className="text-2xl font-semibold mb-6">Permissions</h2>
+
         <div className="overflow-x-auto">
           <table className="min-w-full border border-gray-200">
             <thead className="bg-gray-100">
@@ -144,6 +145,7 @@ const Permission = () => {
                 <th className="px-4 py-3 border text-left">Plan</th>
               </tr>
             </thead>
+
             <tbody>
               {loading && (
                 <tr>
@@ -152,6 +154,7 @@ const Permission = () => {
                   </td>
                 </tr>
               )}
+
               {!loading && error && (
                 <tr>
                   <td colSpan="5" className="text-center py-6 text-red-500">
@@ -159,6 +162,7 @@ const Permission = () => {
                   </td>
                 </tr>
               )}
+
               {!loading &&
                 !error &&
                 users.map((user) => (
@@ -169,23 +173,25 @@ const Permission = () => {
                     <td className="px-4 py-2 border">
                       {user.organization_name || "-"}
                     </td>
-                    <td className="px-4 py-2 border">
-                      {user.plan && user.plan.trim() && user.plan !== "-" ? (
-                        <button
-                          onClick={() => openPanel(user)}
-                          className="hover:underline cursor-pointer font-medium text-black"
-                        >
-                          {user.plan}
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => navigate(`/add-plan`)}
-                          className="hover:underline cursor-pointer font-medium text-gray-500"
-                        >
-                          Add Plan
-                        </button>
-                      )}
-                    </td>
+                  <td className="px-4 py-2 border">
+                  {user.plan && user.plan.trim() && user.plan !== "-" ? (
+                    <button
+                      onClick={() => openPanel(user)}
+                      className="hover:underline cursor-pointer font-medium text-black"
+                    >
+                      {user.plan}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => navigate("/i-beauty/add-plan", { state: { user } })}
+                      className="hover:underline cursor-pointer font-medium text-gray-500"
+                    >
+                      Add Plan
+                    </button>
+                  )}
+                </td>
+
+
                   </tr>
                 ))}
             </tbody>

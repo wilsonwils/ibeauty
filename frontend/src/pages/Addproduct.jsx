@@ -35,14 +35,23 @@ const MultiSelectDropdown = ({ options, selectedOptions, setSelectedOptions, lab
         <span className="text-sm truncate">
           {selectedOptions.length ? selectedOptions.join(", ") : "Select"}
         </span>
-        <svg className={`w-4 h-4 transition ${isOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg
+          className={`w-4 h-4 transition ${isOpen ? "rotate-180" : ""}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </div>
+
       {isOpen && (
         <div className="absolute z-20 w-full bg-white border rounded mt-1 max-h-56 overflow-auto shadow">
           {options.map((option) => (
-            <label key={option} className="flex items-center px-3 py-2 text-sm hover:bg-gray-100 cursor-pointer">
+            <label
+              key={option}
+              className="flex items-center px-3 py-2 text-sm hover:bg-gray-100 cursor-pointer"
+            >
               <input
                 type="checkbox"
                 className="mr-2"
@@ -58,62 +67,13 @@ const MultiSelectDropdown = ({ options, selectedOptions, setSelectedOptions, lab
   );
 };
 
-/* ================= SINGLE SELECT DROPDOWN (Routine) ================= */
-const SingleSelectDropdown = ({ options, selectedOption, setSelectedOption, label }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef(null);
-
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  const selectOption = (option) => {
-    setSelectedOption(option);
-    setIsOpen(false);
-  };
-
-  return (
-    <div className="relative w-full" ref={dropdownRef}>
-      <label className="block text-sm font-medium mb-1">{label}</label>
-      <div
-        className="border border-gray-300 rounded px-3 py-2 min-h-[42px] cursor-pointer flex justify-between items-center"
-        onClick={() => setIsOpen(!isOpen)}
-      >
-        <span className="text-sm">{selectedOption || "Select"}</span>
-        <svg className={`w-4 h-4 transition ${isOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </div>
-      {isOpen && (
-        <div className="absolute z-20 w-full bg-white border rounded mt-1 max-h-56 overflow-auto shadow">
-          {options.map((option) => (
-            <div
-              key={option}
-              className="px-3 py-2 text-sm hover:bg-gray-100 cursor-pointer"
-              onClick={() => selectOption(option)}
-            >
-              {option}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
 /* ================= ADD PRODUCT ================= */
 const AddProduct = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const product = location.state?.product;
 
-  const token = localStorage.getItem("AUTH_TOKEN"); // ✅ use token
+  const token = localStorage.getItem("AUTH_TOKEN");
 
   const [sku, setSku] = useState("");
   const [variantId, setVariantId] = useState("");
@@ -122,7 +82,6 @@ const AddProduct = () => {
 
   const [amount, setAmount] = useState("");
   const [stock, setStock] = useState("");
-  const [gst, setGst] = useState("");
 
   const [majorUsp, setMajorUsp] = useState("");
   const [description, setDescription] = useState("");
@@ -139,11 +98,9 @@ const AddProduct = () => {
   const [selectedGender, setSelectedGender] = useState([]);
   const [selectedAge, setSelectedAge] = useState("");
   const [selectedTime, setSelectedTime] = useState([]);
-  const [selectedRoutine, setSelectedRoutine] = useState("");
 
   const genderOptions = ["Male", "Female", "Transgender"];
   const timeOptions = ["AM", "PM"];
-  const routineOptions = ["Morning", "Evening"];
 
   /* ===== PREFILL EDIT ===== */
   useEffect(() => {
@@ -154,7 +111,6 @@ const AddProduct = () => {
       setProductName(product.name || "");
       setAmount(product.amount || "");
       setStock(product.stock || "");
-      setGst(product.gst || "");
       setMajorUsp(product.major_usp || "");
       setDescription(product.description || "");
       setConcerns(product.concerns || "");
@@ -165,7 +121,6 @@ const AddProduct = () => {
       setSelectedGender(product.gender || []);
       setSelectedAge(product.age || "");
       setSelectedTime(product.time_session || []);
-      setSelectedRoutine(product.routine || "");
     }
   }, [product]);
 
@@ -223,7 +178,6 @@ const AddProduct = () => {
       name: productName,
       amount,
       stock,
-      gst,
       major_usp: majorUsp,
       description,
       concerns,
@@ -233,11 +187,13 @@ const AddProduct = () => {
       gender: selectedGender,
       age: selectedAge,
       time_session: selectedTime,
-      routine: selectedRoutine,
       user_id: localStorage.getItem("userId"),
     };
 
-    const endpoint = product ? `${API_BASE}/update_product/${product.id}` : `${API_BASE}/add_product`;
+    const endpoint = product
+      ? `${API_BASE}/update_product/${product.id}`
+      : `${API_BASE}/add_product`;
+
     const method = product ? "PUT" : "POST";
 
     try {
@@ -259,7 +215,9 @@ const AddProduct = () => {
       console.error(err);
       alert(err.message);
     }
-  };  return (
+  };
+
+  return (
     <div className="bg-white p-6 rounded shadow max-w-6xl mx-auto">
       <h1 className="text-2xl font-semibold mb-6">
         {product ? "Edit Product" : "Add Product"}
@@ -288,7 +246,7 @@ const AddProduct = () => {
         </div>
 
         {/* ROW 2 */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block font-medium text-sm mb-1">Amount</label>
             <input className="border p-2 rounded w-full" value={amount} onChange={(e) => setAmount(e.target.value)} />
@@ -296,10 +254,6 @@ const AddProduct = () => {
           <div>
             <label className="block font-medium text-sm mb-1">Stock</label>
             <input className="border p-2 rounded w-full" value={stock} onChange={(e) => setStock(e.target.value)} />
-          </div>
-          <div>
-            <label className="block font-medium text-sm mb-1">GST %</label>
-            <input className="border p-2 rounded w-full" value={gst} onChange={(e) => setGst(e.target.value)} />
           </div>
         </div>
 
@@ -325,14 +279,28 @@ const AddProduct = () => {
             </div>
           </div>
 
-          <MultiSelectDropdown label="Product Types" options={productTypes} selectedOptions={selectedProductTypes} setSelectedOptions={setSelectedProductTypes} />
-          <MultiSelectDropdown label="Skin Types" options={skinTypes} selectedOptions={selectedSkinTypes} setSelectedOptions={setSelectedSkinTypes} />
+          <MultiSelectDropdown
+            label="Product Types"
+            options={productTypes}
+            selectedOptions={selectedProductTypes}
+            setSelectedOptions={setSelectedProductTypes}
+          />
+          <MultiSelectDropdown
+            label="Skin Types"
+            options={skinTypes}
+            selectedOptions={selectedSkinTypes}
+            setSelectedOptions={setSelectedSkinTypes}
+          />
         </div>
 
         {/* ROW 5 */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <SingleSelectDropdown label="Routine" options={routineOptions} selectedOption={selectedRoutine} setSelectedOption={setSelectedRoutine} />
-          <MultiSelectDropdown label="Gender" options={genderOptions} selectedOptions={selectedGender} setSelectedOptions={setSelectedGender} />
+          <MultiSelectDropdown
+            label="Gender"
+            options={genderOptions}
+            selectedOptions={selectedGender}
+            setSelectedOptions={setSelectedGender}
+          />
           <div>
             <label className="block font-medium text-sm mb-1">Age</label>
             <input className="border p-2 rounded w-full" value={selectedAge} onChange={(e) => setSelectedAge(e.target.value)} />
@@ -345,13 +313,19 @@ const AddProduct = () => {
             <label className="block font-medium text-sm mb-1">Concerns</label>
             <textarea className="border p-4 rounded w-full min-h-[120px]" value={concerns} onChange={(e) => setConcerns(e.target.value)} />
           </div>
-          <MultiSelectDropdown label="Time / Session" options={timeOptions} selectedOptions={selectedTime} setSelectedOptions={setSelectedTime} />
 
+          <MultiSelectDropdown
+            label="Time / Session"
+            options={timeOptions}
+            selectedOptions={selectedTime}
+            setSelectedOptions={setSelectedTime}
+          />
         </div>
 
-        {/* BUTTON */}
         <div className="flex justify-end">
-          <button className="bg-[#00bcd4] text-white px-6 py-2 rounded">{product ? "Update Product" : "Add Product"}</button>
+          <button className="bg-[#00bcd4] text-white px-6 py-2 rounded">
+            {product ? "Update Product" : "Add Product"}
+          </button>
         </div>
 
       </form>

@@ -579,7 +579,6 @@ def update_modules():
         conn.close()
 
         
-
 @auth_bp.post("/add-plan")
 def add_plan_to_user():
     token = request.headers.get("Authorization")
@@ -591,63 +590,62 @@ def add_plan_to_user():
     if not payload:
         return jsonify({"error": "Invalid or expired token"}), 401
 
-    admin_id = payload["user_id"]  
+    admin_id = payload["user_id"]
     data = request.json or {}
 
-    # Get user_id and plan_id from request
     user_id = data.get("user_id")
     plan_id = data.get("plan_id")
     customized_modules = data.get("customized_module_id", [])
 
-    if not user_id or not plan_id:
-        return jsonify({"error": "Missing required fields", "received": data}), 400
+    # ✅ FIX: allow plan_id = 0
+    if user_id is None or plan_id is None:
+        return jsonify({
+            "error": "Missing required fields",
+            "received": data
+        }), 400
 
     conn = get_connection()
     cur = conn.cursor()
 
     try:
-        # Fetch organization_id for the user if not sent
+        # Resolve organization_id safely
         organization_id = data.get("organization_id")
-        if not organization_id:
-            cur.execute("SELECT organization_id FROM users WHERE id=%s", (user_id,))
-            org_row = cur.fetchone()
-            if not org_row:
-                return jsonify({"error": "User not found or has no organization"}), 400
-            organization_id = org_row[0]
+        if organization_id is None:
+            cur.execute(
+                "SELECT organization_id FROM users WHERE id = %s",
+                (user_id,)
+            )
+            row = cur.fetchone()
+            if not row:
+                return jsonify({"error": "User not found"}), 400
+            organization_id = row[0]
 
-        # Debug info
-        print("Adding plan:", {
-            "user_id": user_id,
-            "organization_id": organization_id,
-            "plan_id": plan_id,
-            "added_by": admin_id,
-            "customized_modules": customized_modules
-        })
-
-        # Fetch default modules for the plan
+        # Fetch default modules for plan
         cur.execute("""
             SELECT module_permission_default
             FROM module_payment_plan
             WHERE id = %s
         """, (plan_id,))
         row = cur.fetchone()
+
         if not row:
             return jsonify({"error": "Invalid plan_id"}), 400
-        module_management_id = row[0]  # jsonb
 
-        # Check if a plan already exists
+        module_management_id = row[0]
+
+        # Check if permission row exists
         cur.execute("""
             SELECT id
             FROM module_permission
             WHERE user_id = %s AND organization_id = %s
         """, (user_id, organization_id))
-        existing_row = cur.fetchone()
 
-        if existing_row:
-            # Update existing plan
+        exists = cur.fetchone()
+
+        if exists:
             cur.execute("""
                 UPDATE module_permission
-                SET 
+                SET
                     plan_id = %s,
                     module_management_id = %s,
                     customized_module_id = %s,
@@ -664,7 +662,6 @@ def add_plan_to_user():
             ))
             message = "Plan updated successfully"
         else:
-            # Insert new plan
             cur.execute("""
                 INSERT INTO module_permission (
                     organization_id,
@@ -676,7 +673,7 @@ def add_plan_to_user():
                     created_at,
                     updated_at
                 )
-                VALUES (%s,%s,%s,%s,%s,%s,NOW(),NOW())
+                VALUES (%s, %s, %s, %s, %s, %s, NOW(), NOW())
             """, (
                 organization_id,
                 user_id,
@@ -689,16 +686,12 @@ def add_plan_to_user():
 
         conn.commit()
 
-        # Debug: confirm row inserted
-        cur.execute("SELECT * FROM module_permission WHERE user_id=%s AND organization_id=%s", (user_id, organization_id))
-        print("Row after insert/update:", cur.fetchall())
-
         return jsonify({"message": message}), 201
 
     except Exception as e:
         conn.rollback()
-        print("ADD/UPDATE PLAN ERROR:", str(e))
-        return jsonify({"error": str(e)}), 500
+        print("❌ ADD PLAN ERROR:", e)
+        return jsonify({"error": "Server error"}), 500
 
     finally:
         cur.close()
@@ -709,8 +702,18 @@ def add_plan_to_user():
 
 
 
+
 @auth_bp.get("/users")
 def get_all_users():
+    token = request.headers.get("Authorization")
+    if not token:
+        return jsonify({"error": "Token required"}), 401
+
+    token = token.replace("Bearer ", "").strip()
+    payload = decode_token(token)
+    if not payload:
+        return jsonify({"error": "Invalid or expired token"}), 401
+
     conn = get_connection()
     cur = conn.cursor()
 
@@ -728,15 +731,17 @@ def get_all_users():
                 COALESCE(mp.customized_module_id, '[]'::jsonb) AS customized_module_id
             FROM users u
             LEFT JOIN organizations o 
-                ON u.organization_id = o.id
+                ON o.id = u.organization_id
             LEFT JOIN module_permission mp 
                 ON mp.user_id = u.id
+                AND mp.organization_id = u.organization_id
             LEFT JOIN module_payment_plan mpp 
-                ON mp.plan_id = mpp.id
+                ON mpp.id = mp.plan_id
             ORDER BY u.created_at DESC
         """)
 
         rows = cur.fetchall()
+
         users = []
         for r in rows:
             users.append({
@@ -747,14 +752,14 @@ def get_all_users():
                 "phone": r[4],
                 "organization_name": r[5] or "",
                 "plan": r[6] or "-",
-                "default_module_id": r[7],
-                "customized_module_id": r[8],
+                "default_module_id": r[7] or [],
+                "customized_module_id": r[8] or [],
             })
 
         return jsonify({"users": users}), 200
 
     except Exception as e:
-        print("Error fetching users:", e)
+        print("❌ Error fetching users:", e)
         return jsonify({"error": "Server error"}), 500
 
     finally:

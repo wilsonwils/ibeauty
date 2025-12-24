@@ -1,77 +1,49 @@
-import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { MODULES, PLAN_SIGNATURES } from "../config/module";
 
 const PLANS = [
-  { id: 1, name: "standard", modules: PLAN_SIGNATURES.standard },
+  { id: 0, name: "Trial", modules: PLAN_SIGNATURES.trial },
+  { id: 1, name: "Standard", modules: PLAN_SIGNATURES.standard },
   { id: 2, name: "Pro", modules: PLAN_SIGNATURES.Pro },
   { id: 3, name: "Premium", modules: PLAN_SIGNATURES.Premium },
 ];
 
 const AddPlan = () => {
-  const [users, setUsers] = useState([]);
-  const [selectedUser, setSelectedUser] = useState(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const user = location.state?.user; 
+
   const [selectedModules, setSelectedModules] = useState({});
   const [loading, setLoading] = useState(false);
-  const [fetchingUsers, setFetchingUsers] = useState(true);
 
-  const navigate = useNavigate();
+  if (!user) {
+    return <p className="p-6">No user selected. Go back and select a user first.</p>;
+  }
 
-  // Fetch users from backend
-  useEffect(() => {
-    const fetchUsers = async () => {
-      const token = localStorage.getItem("AUTH_TOKEN");
-      if (!token) return alert("Authorization token missing!");
-
-      try {
-        const res = await fetch("/api/users", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Failed to fetch users");
-
-        setUsers(data.users || []);
-        if (data.users.length > 0) setSelectedUser(data.users[0]);
-      } catch (err) {
-        console.error(err);
-        alert(`Error fetching users: ${err.message}`);
-      } finally {
-        setFetchingUsers(false);
-      }
-    };
-
-    fetchUsers();
-  }, []);
-
-  // Toggle module selection
+  // ================= MODULE TOGGLE =================
   const handleToggleModule = (planId, moduleId) => {
     setSelectedModules((prev) => {
       const prevModules = prev[planId] || [];
-      if (prevModules.includes(moduleId)) {
-        return { ...prev, [planId]: prevModules.filter((id) => id !== moduleId) };
-      } else {
-        return { ...prev, [planId]: [...prevModules, moduleId] };
-      }
+      return {
+        ...prev,
+        [planId]: prevModules.includes(moduleId)
+          ? prevModules.filter((id) => id !== moduleId)
+          : [...prevModules, moduleId],
+      };
     });
   };
 
-  // Add plan
+  // ================= ADD PLAN =================
   const handleAddPlan = async (planName, planId) => {
-    if (!selectedUser) {
-      alert("Please select a user first!");
-      return;
-    }
-
-    const modules = selectedModules[planId] || [];
     const token = localStorage.getItem("AUTH_TOKEN");
     if (!token) return alert("Authorization token missing!");
 
     const payload = {
-      user_id: selectedUser.id,
-      organization_id: selectedUser.organization_id || 123,
+      user_id: user.id,
+      organization_id: user.organization_id || 123,
       plan_id: planId,
-      customized_module_id: modules,
+      customized_module_id: selectedModules[planId] || [],
     };
 
     setLoading(true);
@@ -88,50 +60,37 @@ const AddPlan = () => {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to add plan");
 
-      alert(`Plan "${planName}" added successfully!`);
-
-     
+      alert(`Plan "${planName}" added successfully`);
       navigate("/i-beauty/organization-permission");
-
     } catch (err) {
-      console.error(err);
-      alert(`Error: ${err.message}`);
+      alert(err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  if (fetchingUsers) return <p>Loading users...</p>;
-
+  // ================= UI =================
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
-      <h2 className="text-2xl font-bold mb-4">Add Plan</h2>
+      <h2 className="text-2xl font-bold">Add Plan for {user.full_name || user.name}</h2>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-4 gap-6">
         {PLANS.map((plan) => {
           const defaultModules = plan.modules;
 
           return (
-            <div
-              key={plan.id}
-              className="border rounded-lg p-4 shadow-sm transition bg-white border-gray-300"
-            >
-              <div className="flex justify-center items-center mb-4">
-                <h3 className="font-semibold text-lg">{plan.name}</h3>
-              </div>
+            <div key={plan.id} className="border rounded-lg p-4 shadow bg-white">
+              <h3 className="text-center font-semibold text-lg mb-3">{plan.name}</h3>
 
-              <ul className="pl-2 space-y-1 mb-4 text-sm">
+              <ul className="space-y-2 text-sm mb-4">
                 {MODULES.map((moduleName, index) => {
                   const moduleId = index + 1;
                   const isDefault = defaultModules.includes(moduleId);
                   const isSelected = selectedModules[plan.id]?.includes(moduleId);
 
                   return (
-                    <li
-                      key={moduleId}
-                      className="flex justify-between items-center border-b border-gray-200 py-1"
-                    >
-                      <span className={isDefault ? "text-black font-semibold" : "text-gray-700"}>
+                    <li key={moduleId} className="flex justify-between border-b pb-1">
+                      <span className={isDefault ? "font-semibold text-black" : "text-gray-700"}>
                         {moduleName}
                       </span>
                       <input
@@ -139,20 +98,20 @@ const AddPlan = () => {
                         checked={isDefault || isSelected}
                         disabled={isDefault}
                         onChange={() => handleToggleModule(plan.id, moduleId)}
-                        className="h-5 w-5 text-blue-500"
+                        className="h-4 w-4"
                       />
                     </li>
                   );
                 })}
               </ul>
 
-              <button
-                onClick={() => handleAddPlan(plan.name, plan.id)}
-                disabled={loading || !selectedUser}
-                className="w-full bg-[#00bcd4] text-white py-2 rounded-lg font-semibold hover:bg-[#00acc1] disabled:opacity-50"
-              >
-                {loading ? "Adding..." : "Add Plan"}
-              </button>
+<button
+  onClick={() => handleAddPlan(plan.name, plan.id)}
+  disabled={loading}
+  className="w-full bg-[#00bcd4] text-white py-2 rounded font-semibold hover:bg-[#00acc1] disabled:opacity-50"
+>
+  {plan.name.toLowerCase() === "trial" ? "Free Trial" : "Add Plan"}
+</button>
             </div>
           );
         })}

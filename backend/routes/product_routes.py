@@ -39,7 +39,7 @@ def upload_image():
 
 @product_bp.post("/add_product")
 def add_product():
-    # ===== TOKEN AUTH (SAME AS ADD PLAN) =====
+    # ===== TOKEN AUTH =====
     token = request.headers.get("Authorization")
     if not token:
         return jsonify({"error": "Token required"}), 401
@@ -50,7 +50,6 @@ def add_product():
         return jsonify({"error": "Invalid or expired token"}), 401
 
     user_id = payload["user_id"]
-
     data = request.get_json() or {}
 
     # ===== BASIC INFO =====
@@ -63,9 +62,11 @@ def add_product():
 
     amount = data.get("amount")
     stock = data.get("stock")
-    gst = data.get("gst")
 
-    # ===== NEW COLUMNS =====
+
+    gst = data.get("gst") if data.get("gst") not in ["", None] else None
+
+    # ===== OTHER FIELDS =====
     major_usp = data.get("major_usp")
     concerns = data.get("concerns")
 
@@ -74,16 +75,18 @@ def add_product():
     gender = data.get("gender", [])
     age = data.get("age")
     time_session = data.get("time_session", [])
-    routine = data.get("routine")
 
-    if not all([name, sku, amount, stock, gst]):
+ 
+
+    # ===== REQUIRED VALIDATION =====
+    if not all([name, sku, amount, stock]):
         return jsonify({"error": "Missing required fields"}), 400
 
     conn = get_connection()
     cur = conn.cursor()
 
     try:
-        # Get organization_id
+        # ===== GET ORGANIZATION =====
         cur.execute("SELECT organization_id FROM users WHERE id = %s", (user_id,))
         row = cur.fetchone()
         if not row:
@@ -110,10 +113,9 @@ def add_product():
                 gender,
                 age,
                 time_session,
-                routine,
                 is_active
             )
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,true)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,true)
             RETURNING id
         """
 
@@ -127,22 +129,24 @@ def add_product():
             image_url,
             amount,
             stock,
-            gst,
+            gst,  
             major_usp,
             concerns,
             json.dumps(product_types),
             json.dumps(skin_types),
             json.dumps(gender),
-            json.dumps(age),
-            json.dumps(time_session),
-            routine
+            age,
+            json.dumps(time_session)
         )
 
         cur.execute(query, values)
         product_id = cur.fetchone()[0]
         conn.commit()
 
-        return jsonify({"status": "success", "product_id": product_id}), 201
+        return jsonify({
+            "status": "success",
+            "product_id": product_id
+        }), 201
 
     except Exception as e:
         conn.rollback()
@@ -151,6 +155,7 @@ def add_product():
     finally:
         cur.close()
         conn.close()
+
 
 # GET PRODUCTS 
 @product_bp.route("/get_products", methods=["GET"])
@@ -171,6 +176,7 @@ def get_products():
     cur = conn.cursor()
 
     try:
+        # ===== GET ORGANIZATION =====
         cur.execute(
             "SELECT organization_id FROM users WHERE id=%s",
             (user_id,)
@@ -181,6 +187,7 @@ def get_products():
 
         org_id = row[0]
 
+        
         cur.execute("""
             SELECT
                 id,
@@ -200,7 +207,6 @@ def get_products():
                 gender,
                 age,
                 time_session,
-                routine,
                 is_active
             FROM products
             WHERE organization_id = %s
@@ -212,11 +218,14 @@ def get_products():
 
         for row in cur.fetchall():
             p = dict(zip(columns, row))
+
+            # ===== SAFE JSON FIELDS =====
             p["product_types"] = p["product_types"] or []
             p["skin_types"] = p["skin_types"] or []
             p["gender"] = p["gender"] or []
             p["time_session"] = p["time_session"] or []
             p["age"] = p["age"] or ""
+
             products.append(p)
 
         return jsonify({"products": products}), 200
@@ -260,6 +269,7 @@ def update_product(product_id):
     cur = conn.cursor()
 
     try:
+       
         query = """
             UPDATE products SET
                 name = %s,
@@ -277,8 +287,7 @@ def update_product(product_id):
                 skin_types = %s,
                 gender = %s,
                 age = %s,
-                time_session = %s,
-                routine = %s
+                time_session = %s
             WHERE id = %s
         """
 
@@ -299,7 +308,6 @@ def update_product(product_id):
             json.dumps(data.get("gender", [])),
             json.dumps(data.get("age")),
             json.dumps(data.get("time_session", [])),
-            data.get("routine"),
             product_id
         )
 

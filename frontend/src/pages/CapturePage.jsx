@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { API_BASE } from "../utils/api";
 
+// Import CKEditor
+import { CKEditor } from "@ckeditor/ckeditor5-react";
+import ClassicEditor from "@ckeditor/ckeditor5-build-classic";
+
 const CapturePage = ({ data, setData, setSaveFunction }) => {
   const [description, setDescription] = useState(data.description || "");
   const [errorMsg, setErrorMsg] = useState("");
@@ -20,7 +24,6 @@ const CapturePage = ({ data, setData, setSaveFunction }) => {
       if (!flowId || !token) return false;
 
       const skip = options?.skip === true;
-
 
       if (!skip && (!_stepData?.description || _stepData.description.trim() === "")) {
         showError("Please enter a description");
@@ -54,23 +57,32 @@ const CapturePage = ({ data, setData, setSaveFunction }) => {
 
   return (
     <div className="flex flex-col gap-4 relative">
-    {errorMsg && (
-      <div className="mt-4 flex justify-center">
-        <div className="inline-block rounded-md bg-red-100 border border-red-400 text-red-700 px-6 py-2 text-sm font-medium shadow-sm">
-          {errorMsg}
+      {errorMsg && (
+        <div className="mt-4 flex justify-center">
+          <div className="inline-block rounded-md bg-red-100 border border-red-400 text-red-700 px-6 py-2 text-sm font-medium shadow-sm">
+            {errorMsg}
+          </div>
         </div>
-      </div>
-    )}
-
+      )}
 
       <div>
         <label className="font-semibold">Disclaimer</label>
-        <textarea
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          className="w-full border p-2 rounded"
-          rows={4}
-          placeholder="Enter description here"
+        <CKEditor
+          editor={ClassicEditor}
+          data={description}
+          onChange={(event, editor) => {
+            const data = editor.getData();
+            setDescription(data);
+          }}
+          config={{
+            placeholder: "Enter description here",
+            toolbar: [
+              "heading", "|",
+              "bold", "italic", "underline", "strikethrough", "|",
+              "link", "bulletedList", "numberedList", "|",
+              "undo", "redo"
+            ]
+          }}
         />
       </div>
     </div>
