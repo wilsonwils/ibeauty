@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, redirect
 import os
 import requests
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import jwt
 from passlib.hash import bcrypt
 import json
@@ -597,49 +597,53 @@ def add_plan_to_user():
     plan_id = data.get("plan_id")
     customized_modules = data.get("customized_module_id", [])
 
-    # ✅ FIX: allow plan_id = 0
     if user_id is None or plan_id is None:
-        return jsonify({
-            "error": "Missing required fields",
-            "received": data
-        }), 400
+        return jsonify({"error": "Missing required fields", "received": data}), 400
 
     conn = get_connection()
     cur = conn.cursor()
 
     try:
-        # Resolve organization_id safely
+        # ---------------- GET ORGANIZATION ----------------
         organization_id = data.get("organization_id")
         if organization_id is None:
-            cur.execute(
-                "SELECT organization_id FROM users WHERE id = %s",
-                (user_id,)
-            )
+            cur.execute("SELECT organization_id FROM users WHERE id = %s", (user_id,))
             row = cur.fetchone()
             if not row:
                 return jsonify({"error": "User not found"}), 400
             organization_id = row[0]
 
-        # Fetch default modules for plan
+        # 🔴 ADDED: FREE TRIAL EXPIRED WARNING (AFTER 15 DAYS)
         cur.execute("""
-            SELECT module_permission_default
-            FROM module_payment_plan
-            WHERE id = %s
-        """, (plan_id,))
-        row = cur.fetchone()
+            SELECT trial_end_at
+            FROM organization_modules
+            WHERE organization_id = %s
+        """, (organization_id,))
+        trial_check = cur.fetchone()
 
+        if trial_check and trial_check[0] is not None:
+            now = datetime.now(timezone.utc)
+            if now > trial_check[0]:
+                return jsonify({
+                    "error": "FREE_TRIAL_EXPIRED",
+                    "message": "Free trial has expired"
+                }), 403
+
+        # ---------------- GET PLAN MODULE DEFAULT ----------------
+        cur.execute(
+            "SELECT module_permission_default FROM module_payment_plan WHERE id = %s",
+            (plan_id,)
+        )
+        row = cur.fetchone()
         if not row:
             return jsonify({"error": "Invalid plan_id"}), 400
-
         module_management_id = row[0]
 
-        # Check if permission row exists
-        cur.execute("""
-            SELECT id
-            FROM module_permission
-            WHERE user_id = %s AND organization_id = %s
-        """, (user_id, organization_id))
-
+        # ---------------- UPSERT MODULE PERMISSION ----------------
+        cur.execute(
+            "SELECT id FROM module_permission WHERE user_id = %s AND organization_id = %s",
+            (user_id, organization_id)
+        )
         exists = cur.fetchone()
 
         if exists:
@@ -684,19 +688,45 @@ def add_plan_to_user():
             ))
             message = "Plan added successfully"
 
-        conn.commit()
+        # ---------------- FREE TRIAL LOGIC ----------------
+        if plan_id == 0:
+            cur.execute(
+                "SELECT id, trial_start_at FROM organization_modules WHERE organization_id = %s",
+                (organization_id,)
+            )
+            trial_row = cur.fetchone()
 
+            trial_start_at = datetime.now(timezone.utc)
+            trial_end_at = trial_start_at + timedelta(days=15)
+
+            if trial_row:
+                if trial_row[1] is not None:
+                    return jsonify({"error": "Free trial already used. Please purchase a paid plan."}), 403
+                cur.execute("""
+                    UPDATE organization_modules
+                    SET trial_start_at = %s, trial_end_at = %s
+                    WHERE id = %s
+                """, (trial_start_at, trial_end_at, trial_row[0]))
+            else:
+                cur.execute("""
+                    INSERT INTO organization_modules (
+                        organization_id,
+                        trial_start_at,
+                        trial_end_at
+                    ) VALUES (%s, %s, %s)
+                """, (organization_id, trial_start_at, trial_end_at))
+
+        conn.commit()
         return jsonify({"message": message}), 201
 
     except Exception as e:
         conn.rollback()
-        print("❌ ADD PLAN ERROR:", e)
-        return jsonify({"error": "Server error"}), 500
+        print("ADD PLAN ERROR:", e)
+        return jsonify({"error": "Server error", "details": str(e)}), 500
 
     finally:
         cur.close()
         conn.close()
-
 
 
 
@@ -759,7 +789,7 @@ def get_all_users():
         return jsonify({"users": users}), 200
 
     except Exception as e:
-        print("❌ Error fetching users:", e)
+        print(" Error fetching users:", e)
         return jsonify({"error": "Server error"}), 500
 
     finally:

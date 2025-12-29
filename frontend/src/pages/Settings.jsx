@@ -2,23 +2,25 @@ import React, { useEffect, useState } from "react";
 import { API_BASE } from "../utils/api";
 import { MODULES, PLAN_SIGNATURES } from "../config/module";
 
-/* ================= PLAN ID MAP (BACKEND → FRONTEND) ================= */
+/* ================= PLAN ID MAP ================= */
 const PLAN_ID_MAP = {
+  0: "trial",
   1: "standard",
-  2: "Pro",
-  3: "Premium",
+  2: "growth",
+  3: "pro",
 };
 
 /* ================= PLANS ================= */
 const PLANS = [
-
+  { id: 0, name: "trial", modules: PLAN_SIGNATURES.trial },
   { id: 1, name: "standard", modules: PLAN_SIGNATURES.standard },
-  { id: 2, name: "Pro", modules: PLAN_SIGNATURES.Pro },
-  { id: 3, name: "Premium", modules: PLAN_SIGNATURES.Premium },
+  { id: 2, name: "growth", modules: PLAN_SIGNATURES.growth },
+  { id: 3, name: "pro", modules: PLAN_SIGNATURES.pro },
 ];
 
 const Settings = () => {
-  const [currentPlan, setCurrentPlan] = useState("");
+  const [currentPlanId, setCurrentPlanId] = useState(null);
+  const [currentPlanName, setCurrentPlanName] = useState("");
   const [loading, setLoading] = useState(true);
 
   /* ================= FETCH USER PLAN ================= */
@@ -36,8 +38,8 @@ const Settings = () => {
         const data = await res.json();
 
         if (data.status === "success") {
-          const planName = PLAN_ID_MAP[data.plan_id] || "Custom";
-          setCurrentPlan(planName);
+          setCurrentPlanId(data.plan_id);
+          setCurrentPlanName(PLAN_ID_MAP[data.plan_id] || "custom");
 
           localStorage.setItem("plan_id", data.plan_id);
         }
@@ -51,10 +53,17 @@ const Settings = () => {
     fetchPlan();
   }, []);
 
-  /* ================= BUY PLAN ================= */
-  const handleBuy = (planName) => {
-    alert(`Proceed to buy: ${planName}`);
-    // 🔐 Integrate Razorpay / Stripe here
+  /* ================= BUY / ACTIVATE PLAN ================= */
+  const handleBuy = (plan) => {
+    if (plan.id === currentPlanId) return;
+
+    if (plan.name === "trial") {
+      alert("Free Trial already used or expired");
+      return;
+    }
+
+    alert(`Proceed to buy ${plan.name} plan`);
+    // 🔐 Razorpay / Stripe integration here
   };
 
   if (loading) {
@@ -65,9 +74,11 @@ const Settings = () => {
     <div className="max-w-6xl mx-auto p-6 space-y-6">
       <h2 className="text-2xl font-bold mb-4">Plan Details</h2>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {PLANS.map((plan) => {
-          const isCurrent = plan.name === currentPlan;
+          const isCurrent = plan.id === currentPlanId;
+          const isTrial = plan.id === 0;
+          const isDowngrade = currentPlanId > plan.id;
 
           return (
             <div
@@ -82,29 +93,28 @@ const Settings = () => {
             >
               {/* Header */}
               <div className="flex justify-between items-center mb-4">
-                <h3 className="font-semibold text-lg">{plan.name}</h3>
+                <h3 className="font-semibold text-lg capitalize">
+                  {plan.name}
+                </h3>
               </div>
 
               {/* Modules */}
               <ul className="pl-2 space-y-1 mb-4 text-sm">
                 {MODULES.map((moduleName, index) => {
-                  const id = index + 1;
-                  const included = plan.modules.includes(id);
+                  const moduleId = index + 1;
+                  const included = plan.modules.includes(moduleId);
 
                   return (
                     <li
-                      key={id}
+                      key={moduleId}
                       className="flex justify-between items-center border-b border-gray-200 py-1"
                     >
-                      <span className="flex items-center">
-                        <span className="mr-2 text-gray-700 text-xs">✲</span>
-                        <span
-                          className={
-                            included ? "text-black" : "text-gray-500"
-                          }
-                        >
-                          {moduleName}
-                        </span>
+                      <span
+                        className={
+                          included ? "text-black" : "text-gray-500"
+                        }
+                      >
+                        {moduleName}
                       </span>
 
                       <span
@@ -121,20 +131,33 @@ const Settings = () => {
 
               {/* Action Button */}
               {isCurrent ? (
-                <button
-                  disabled
-                  className="w-full bg-green-400 text-white py-2 rounded-lg font-semibold cursor-not-allowed"
-                >
-                  Current Plan
-                </button>
-              ) : (
-                <button
-                  onClick={() => handleBuy(plan.name)}
-                  className="w-full bg-[#00bcd4] text-white py-2 rounded-lg font-semibold hover:bg-[#00acc1]"
-                >
-                  Buy Plan
-                </button>
-              )}
+              <button
+                disabled
+                className="w-full bg-green-500 text-white py-2 rounded-lg font-semibold cursor-not-allowed"
+              >
+                Current Plan
+              </button>
+            ) : (
+              <button
+                onClick={() => handleBuy(plan)}
+                disabled={isDowngrade}
+                className={`w-full py-2 rounded-lg font-semibold text-white
+                  ${
+                    isTrial
+                      ? "bg-gray-600 hover:bg-gray-700"
+                      : "bg-[#00bcd4] hover:bg-[#00acc1]"
+                  }
+                  ${isDowngrade ? "opacity-50 cursor-not-allowed" : ""}
+                `}
+              >
+                {isDowngrade
+                  ? " "
+                  : isTrial
+                  ? "Free Trial"
+                  : "Buy Plan"}
+              </button>
+            )}
+
             </div>
           );
         })}

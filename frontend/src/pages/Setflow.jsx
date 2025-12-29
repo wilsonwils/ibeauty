@@ -7,8 +7,10 @@ import ContactPage from "./ContactPage";
 import Segmentation from "./Segmentation";
 import SkingoalPage from "./SkingoalPage";
 import SummaryPage from "./SummaryPage";
+import RoutinePage from "./RoutinePage";
 import SuggestProduct from "./SuggestProduct";
 import { permissionService } from "../services/permissionService";
+import { label } from "three/tsl";
 const Setflow = () => {
     const getUserKey = (key) => {
     const userId = localStorage.getItem("userId");
@@ -17,6 +19,9 @@ const Setflow = () => {
 
   const [activeIndex, setActiveIndex] = useState(0);
   const [isCompleted, setIsCompleted] = useState(false);
+
+  const [maxReachedIndex, setMaxReachedIndex] = useState(0);
+  const [flowUnlocked, setFlowUnlocked] = useState(false);
 
   // -------------------- USER-SPECIFIC LOCALSTORAGE --------------------
 
@@ -50,6 +55,10 @@ const Setflow = () => {
   const [summaryData, setSummaryData] = useState(
     JSON.parse(localStorage.getItem(getUserKey("summary_data"))) || {}
   );
+    const [routineData, setRoutineData] = useState(
+    JSON.parse(localStorage.getItem(getUserKey("routine_data"))) || {}
+  );
+
   const [suggestData, setSuggestData] = useState(
     JSON.parse(localStorage.getItem(getUserKey("suggest_data"))) || {}
   );
@@ -76,6 +85,9 @@ const Setflow = () => {
   React.useEffect(() => {
     localStorage.setItem(getUserKey("summary_data"), JSON.stringify(summaryData));
   }, [summaryData]);
+    React.useEffect(() => {
+    localStorage.setItem(getUserKey("routine_data"), JSON.stringify(routineData));
+  }, [routineData]);
   React.useEffect(() => {
     localStorage.setItem(getUserKey("suggest_data"), JSON.stringify(suggestData));
   }, [suggestData]);
@@ -88,6 +100,7 @@ const Setflow = () => {
   const [lastSavedSegmentation, setLastSavedSegmentation] = useState({});
   const [lastSavedSkingoal, setLastSavedSkingoal] = useState({});
   const [lastSavedSummary, setLastSavedSummary] = useState({});
+  const [lastSavedRoutine, setLastSavedRoutine] = useState( {} );
   const [lastSavedSuggest, setLastSavedSuggest] = useState({});
 
   const [currentSaveFunction, setCurrentSaveFunction] = useState(null);
@@ -149,6 +162,7 @@ const Setflow = () => {
         if (stepName === "Segmentation") stepData = segmentationData;
         if (stepName === "Skin Goal") stepData = skingoalData;
         if (stepName === "Summary") stepData = summaryData;
+        if (stepName === "Routine") stepData = routineData;
         if (stepName === "Suggest Product") stepData = suggestData;
 
         return await currentSaveFunction(newFlowId, stepData, {
@@ -184,6 +198,7 @@ const Setflow = () => {
     if (stepName === "Segmentation") shouldSave = true;
     if (stepName === "Skin Goal") shouldSave = true;
     if (stepName === "Summary") shouldSave = true;
+    if (stepName === "Routine") shouldSave = true;
     if (stepName === "Suggest Product")
       shouldSave = isDataChanged(lastSavedSuggest, suggestData);
 
@@ -224,6 +239,9 @@ const Setflow = () => {
       case "Summary":
         setLastSavedSummary(summaryData);
         break;
+      case "Routine":
+        setLastSavedRoutine(routineData);
+        break;
       case "Suggest Product":
         setLastSavedSuggest(suggestData);
         break;
@@ -233,6 +251,9 @@ const Setflow = () => {
 
     if (activeIndex < steps.length - 1) {
       setActiveIndex(activeIndex + 1);
+    }
+    if (next > maxReachedIndex) {
+      setMaxReachedIndex(next);
     }
   };
 
@@ -276,6 +297,10 @@ const Setflow = () => {
         setLastSavedSummary({});
         setSummaryData({});
         break;
+      case "Routine":
+        setLastSavedRoutine({});
+        setRoutineData({});
+        break;
       case "Suggest Product":
         setLastSavedSuggest({});
         setSuggestData({});
@@ -287,6 +312,10 @@ const Setflow = () => {
     if (activeIndex < steps.length - 1) {
       setActiveIndex(activeIndex + 1);
     }
+    if (next > maxReachedIndex) {
+      setMaxReachedIndex(next);
+   }
+
   };
 
   // ==================================================
@@ -297,7 +326,10 @@ const Setflow = () => {
     if (!saved) return;
 
     setIsCompleted(true);
+    setFlowUnlocked(true);
     setActiveIndex(0); // GO TO LANDING PAGE
+        
+   
   };
 
   // ==================================================
@@ -383,6 +415,18 @@ const Setflow = () => {
         setData={setSummaryData}
         setSaveFunction={setCurrentSaveFunction}
       />
+    ),
+  },
+  {
+    label: "Routine",
+    moduleId: 12,
+    render: (
+      <RoutinePage
+        data={Object.keys(routineData).length ? routineData : lastSavedRoutine}
+        setData={setRoutineData}
+        setSaveFunction={setCurrentSaveFunction}
+      />
+
     ),
   },
   {
