@@ -1,6 +1,81 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { API_BASE } from "../utils/api";
 
+/* ================= MULTI SELECT DROPDOWN ================= */
+const MultiSelectDropdown = ({
+  options,
+  selectedOptions,
+  setSelectedOptions,
+  label,
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const toggleOption = (option) => {
+    setSelectedOptions(
+      selectedOptions.includes(option)
+        ? selectedOptions.filter((o) => o !== option)
+        : [...selectedOptions, option]
+    );
+  };
+
+  return (
+    <div className="relative w-full" ref={dropdownRef}>
+      <div
+        className="border border-gray-300 rounded px-3 py-2 min-h-[42px] cursor-pointer flex justify-between items-center"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <span className="text-sm truncate">
+          {selectedOptions.length ? selectedOptions.join(", ") : "Select"}
+        </span>
+        <svg
+          className={`w-4 h-4 transition ${isOpen ? "rotate-180" : ""}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M19 9l-7 7-7-7"
+          />
+        </svg>
+      </div>
+
+      {isOpen && (
+        <div className="absolute z-20 w-full bg-white border rounded mt-1 max-h-56 overflow-auto shadow">
+          {options.map((option) => (
+            <label
+              key={option}
+              className="flex items-center px-3 py-2 text-sm hover:bg-gray-100 cursor-pointer"
+            >
+              <input
+                type="checkbox"
+                className="mr-2"
+                checked={selectedOptions.includes(option)}
+                onChange={() => toggleOption(option)}
+              />
+              {option}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ================= QUESTION CONFIG ================= */
 const questionaireFields = {
   Gender: {
     type: "multi-select",
@@ -8,7 +83,11 @@ const questionaireFields = {
     multi: true,
   },
   Age: { type: "number", placeholder: "Enter your minimum age" },
-  "Skin Type": { type: "text", placeholder: "Enter your skin type" },
+  "Skin Type": {
+    type: "multi-select",
+    options: [],
+    multi: true,
+  },
 };
 
 const Questionaire = ({ data, setData, setSaveFunction }) => {
@@ -21,8 +100,27 @@ const Questionaire = ({ data, setData, setSaveFunction }) => {
       : [],
   });
   const [required, setRequired] = useState(data.required || {});
-  const [skinInput, setSkinInput] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+
+  const [skinTypes, setSkinTypes] = useState([]);
+
+  /* ================= FETCH SKIN TYPES ================= */
+  useEffect(() => {
+    const fetchSkinTypes = async () => {
+      const token = localStorage.getItem("AUTH_TOKEN");
+      if (!token) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/skin_types`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) setSkinTypes(await res.json());
+      } catch (err) {
+        console.error("Failed to fetch skin types", err);
+      }
+    };
+    fetchSkinTypes();
+  }, []);
 
   useEffect(() => {
     setData({ questionaire, answers, required });
@@ -45,7 +143,6 @@ const Questionaire = ({ data, setData, setSaveFunction }) => {
         ? {}
         : _stepData || { questionaire, answers, required };
 
-      // Validation 1: Yes/No selected
       const unselectedFields = Object.keys(questionaireFields).filter(
         (field) => dataToSave.questionaire?.[field] === undefined
       );
@@ -55,7 +152,6 @@ const Questionaire = ({ data, setData, setSaveFunction }) => {
         return false;
       }
 
-      // Validation 2: Input required when Yes is selected
       const emptyInputFields = Object.keys(questionaireFields).filter(
         (field) => {
           const isYes = dataToSave.questionaire?.[field] === true;
@@ -125,30 +221,12 @@ const Questionaire = ({ data, setData, setSaveFunction }) => {
     setSaveFunction(() => saveQuestionaire);
   }, [setSaveFunction, questionaire, answers, required]);
 
-  /* ================= HANDLERS ================= */
-
   const toggleGenderOption = (opt) => {
     setAnswers((prev) => ({
       ...prev,
       Gender: prev.Gender?.includes(opt)
         ? prev.Gender.filter((o) => o !== opt)
         : [...(prev.Gender || []), opt],
-    }));
-  };
-
-  const addSkinType = () => {
-    if (!skinInput.trim()) return;
-    setAnswers((prev) => ({
-      ...prev,
-      "Skin Type": [...(prev["Skin Type"] || []), skinInput.trim()],
-    }));
-    setSkinInput("");
-  };
-
-  const removeSkinType = (idx) => {
-    setAnswers((prev) => ({
-      ...prev,
-      "Skin Type": prev["Skin Type"].filter((_, i) => i !== idx),
     }));
   };
 
@@ -162,7 +240,6 @@ const Questionaire = ({ data, setData, setSaveFunction }) => {
   };
 
   /* ================= UI ================= */
-
   return (
     <div className="flex flex-col gap-4 p-4 border border-gray-300 rounded mt-4 relative">
       {errorMsg && (
@@ -212,14 +289,22 @@ const Questionaire = ({ data, setData, setSaveFunction }) => {
                   onChange={() =>
                     setRequired((p) => ({ ...p, [field]: !p[field] }))
                   }
-                  title="Required"
                 />
               </div>
             </div>
 
             {showInput && (
-              <div className="flex flex-col gap-2">
-                {config.multi ? (
+              <>
+                {field === "Skin Type" ? (
+                  <MultiSelectDropdown
+                    label="Skin Type"
+                    options={skinTypes}
+                    selectedOptions={answers["Skin Type"] || []}
+                    setSelectedOptions={(vals) =>
+                      setAnswers((p) => ({ ...p, "Skin Type": vals }))
+                    }
+                  />
+                ) : config.multi ? (
                   <div className="flex gap-4 ml-2 mt-1">
                     {config.options.map((opt) => (
                       <label key={opt} className="flex items-center gap-2">
@@ -232,40 +317,6 @@ const Questionaire = ({ data, setData, setSaveFunction }) => {
                       </label>
                     ))}
                   </div>
-                ) : field === "Skin Type" ? (
-                  <>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={skinInput}
-                        placeholder={config.placeholder}
-                        onChange={(e) => setSkinInput(e.target.value)}
-                        className="border px-3 py-2 rounded w-full"
-                      />
-                      <button
-                        onClick={addSkinType}
-                        className="bg-[#01bcd5] text-white px-3 py-2 rounded"
-                      >
-                        Add
-                      </button>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {answers["Skin Type"]?.map((type, index) => (
-                        <span
-                          key={index}
-                          className="px-3 py-1 bg-gray-200 rounded flex items-center gap-2"
-                        >
-                          {type}
-                          <button
-                            onClick={() => removeSkinType(index)}
-                            className="text-red-500 font-bold"
-                          >
-                            ×
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  </>
                 ) : (
                   <input
                     type={config.type}
@@ -280,7 +331,7 @@ const Questionaire = ({ data, setData, setSaveFunction }) => {
                     className="border px-3 py-2 rounded w-full"
                   />
                 )}
-              </div>
+              </>
             )}
           </div>
         );

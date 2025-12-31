@@ -5,9 +5,11 @@ import { api, API_BASE } from "../utils/api";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import Pagination from "../components/Pagination";
+import { useTrial } from "../context/TrialContext";
 
 const ProductList = () => {
   const navigate = useNavigate();
+  const { trialExpired, setShowPopup } = useTrial();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -32,6 +34,15 @@ const ProductList = () => {
 
   // Soft warning
   const [warning, setWarning] = useState("");
+
+const trialGuard = (action) => {
+  if (trialExpired) {
+    setShowPopup(true);
+    return;
+  }
+  action();
+};
+
 
   // Fetch products
 const fetchProducts = async () => {
@@ -76,59 +87,69 @@ const fetchProducts = async () => {
   };
 
   // OPEN DELETE SINGLE
-  const openDeletePopup = (productId) => {
-    setIsBulkDelete(false);
-    setSelectedProductId(productId);
-    setShowDeleteModal(true);
-  };
+const openDeletePopup = (productId) => {
+  if (trialExpired) {
+    setShowPopup(true);
+    return;
+  }
+
+  setIsBulkDelete(false);
+  setSelectedProductId(productId);
+  setShowDeleteModal(true);
+};
+
 
   // CONFIRM DELETE (single + bulk)
-  const confirmDelete = async () => {
-    // BULK DELETE
-    if (isBulkDelete) {
-      try {
-        for (const id of selectedIds) {
-          await api(`/delete_product/${id}`, { method: "DELETE" });
-        }
+const confirmDelete = async () => {
+  if (trialExpired) {
+    setShowPopup(true);
+    setShowDeleteModal(false);
+    return;
+  }
 
-        setProducts(products.filter((p) => !selectedIds.includes(p.id)));
-        setSelectedIds([]);
-        setSelectAll(false);
-      } catch (err) {
-        console.error(err);
-        setWarning("Bulk delete failed!");
-        setTimeout(() => setWarning(""), 3000);
-      }
-
-      setIsBulkDelete(false);
-      setShowDeleteModal(false);
-      return;
-    }
-
-    // SINGLE DELETE
-    if (!selectedProductId) return;
-
+  // BULK DELETE
+  if (isBulkDelete) {
     try {
-      const res = await api(`/delete_product/${selectedProductId}`, {
-        method: "DELETE",
-      });
-      const data = await res.json();
-
-      if (res.ok) {
-        setProducts(products.filter((p) => p.id !== selectedProductId));
-      } else {
-        setWarning(data.error || "Delete failed!");
-        setTimeout(() => setWarning(""), 3000);
+      for (const id of selectedIds) {
+        await api(`/delete_product/${id}`, { method: "DELETE" });
       }
+      setProducts(products.filter((p) => !selectedIds.includes(p.id)));
+      setSelectedIds([]);
+      setSelectAll(false);
     } catch (err) {
       console.error(err);
-      setWarning("Something went wrong!");
+      setWarning("Bulk delete failed!");
       setTimeout(() => setWarning(""), 3000);
     }
-
-    setSelectedProductId(null);
+    setIsBulkDelete(false);
     setShowDeleteModal(false);
-  };
+    return;
+  }
+
+  // SINGLE DELETE
+  if (!selectedProductId) return;
+
+  try {
+    const res = await api(`/delete_product/${selectedProductId}`, {
+      method: "DELETE",
+    });
+    const data = await res.json();
+
+    if (res.ok) {
+      setProducts(products.filter((p) => p.id !== selectedProductId));
+    } else {
+      setWarning(data.error || "Delete failed!");
+      setTimeout(() => setWarning(""), 3000);
+    }
+  } catch (err) {
+    console.error(err);
+    setWarning("Something went wrong!");
+    setTimeout(() => setWarning(""), 3000);
+  }
+
+  setSelectedProductId(null);
+  setShowDeleteModal(false);
+};
 
   // FILTER PRODUCTS
   const filteredProducts = products.filter((p) =>
@@ -142,6 +163,10 @@ const fetchProducts = async () => {
 
   // Export Excel
   const exportToExcel = () => {
+  if (trialExpired) {
+    setShowPopup(true);
+    return;
+  }
     const excelData = products.map((p, index) => ({
       "S.No": index + 1,
       SKU: p.sku,
@@ -211,16 +236,25 @@ const fetchProducts = async () => {
   };
 
  
-  const deleteSelected = () => {
-    if (selectedIds.length === 0) {
-      setWarning("Please select at least one product.");
-      setTimeout(() => setWarning(""), 2500);
-      return;
-    }
+const deleteSelected = () => {
+  // ✅ First, check trial expired
+  if (trialExpired) {
+    setShowPopup(true);
+    return;
+  }
 
-    setIsBulkDelete(true);
-    setShowDeleteModal(true);
-  };
+  // Only runs if trial is active
+  if (selectedIds.length === 0) {
+    setWarning("Please select at least one product.");
+    setTimeout(() => setWarning(""), 2500);
+    return;
+  }
+
+  setIsBulkDelete(true);
+  setShowDeleteModal(true);
+};
+
+
 
   if (loading) return <p className="text-center mt-10">Loading products...</p>;
 
@@ -242,14 +276,14 @@ const fetchProducts = async () => {
           
           {/* DELETE ALL BUTTON */}
           <button
-            onClick={deleteSelected}
+             onClick={() => trialGuard(deleteSelected)}
             className="bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-600"
           >
             Delete All Selected
           </button>
 
           <button
-            onClick={handleAddProduct}
+             onClick={() => trialGuard(handleAddProduct)}
             className="bg-[#00bcd4] text-white px-4 py-2 rounded-md flex items-center gap-2 hover:bg-[#00a2b2]"
           >
             <FiPlus /> Add product
@@ -257,14 +291,14 @@ const fetchProducts = async () => {
 
           <button
             className="border px-4 py-2 rounded-md flex items-center gap-2 hover:bg-gray-100"
-            onClick={() => setShowFilters(!showFilters)}
+            onClick={() => trialGuard(() => setShowFilters(!showFilters))}
           >
             <FiFilter /> Filter
           </button>
 
           <button
             className="border px-4 py-2 rounded-md hover:bg-gray-100"
-            onClick={exportToExcel}
+            onClick={() => trialGuard(exportToExcel)}
           >
             Export Data
           </button>
@@ -369,17 +403,17 @@ const fetchProducts = async () => {
                   <td className="p-3 text-center flex justify-center gap-2">
                     <button
                       className="text-[#00bcd4] hover:text-[#008b9c]"
-                      onClick={() => handleEdit(p)}
+                      onClick={() => trialGuard(() => handleEdit(p))}
                     >
                       <FiEdit size={18} />
                     </button>
-
                     <button
                       className="text-red-500 hover:text-red-700"
-                      onClick={() => openDeletePopup(p.id)}
+                      onClick={() => openDeletePopup(p.id)} // NO trialGuard wrapper
                     >
                       <FiTrash2 size={18} />
                     </button>
+
                   </td>
                 </tr>
               ))

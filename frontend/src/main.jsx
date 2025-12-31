@@ -7,12 +7,15 @@ import App from "./App.jsx";
 
 // Import UserProvider (we'll create this)
 import { UserProvider } from "./context/UserContext.jsx";
+import { TrialProvider } from "./context/TrialContext";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
     <BrowserRouter>
       <UserProvider>
-        <App />
+        <TrialProvider>
+         <App />
+        </TrialProvider>
       </UserProvider>
     </BrowserRouter>
   </StrictMode>

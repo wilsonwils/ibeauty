@@ -20,7 +20,7 @@ const PLANS = [
 
 const Settings = () => {
   const [currentPlanId, setCurrentPlanId] = useState(null);
-  const [currentPlanName, setCurrentPlanName] = useState("");
+  const [trialUsed, setTrialUsed] = useState(false);
   const [loading, setLoading] = useState(true);
 
   /* ================= FETCH USER PLAN ================= */
@@ -38,10 +38,20 @@ const Settings = () => {
         const data = await res.json();
 
         if (data.status === "success") {
-          setCurrentPlanId(data.plan_id);
-          setCurrentPlanName(PLAN_ID_MAP[data.plan_id] || "custom");
-
-          localStorage.setItem("plan_id", data.plan_id);
+          /**
+           * ✅ FIX:
+           * If trial is expired, DO NOT treat it as current plan
+           */
+          if (data.plan_id === 0 && data.trial_expired) {
+            setCurrentPlanId(null); // ❌ no active plan
+            setTrialUsed(true);     // 🚫 trial cannot be reused
+          } else {
+            setCurrentPlanId(data.plan_id); // active plan
+            setTrialUsed(data.plan_id !== 0); // paid plan means trial used
+          }
+        } else {
+          setCurrentPlanId(null);
+          setTrialUsed(true);
         }
       } catch (err) {
         console.error("Failed to load plan", err);
@@ -57,13 +67,13 @@ const Settings = () => {
   const handleBuy = (plan) => {
     if (plan.id === currentPlanId) return;
 
-    if (plan.name === "trial") {
-      alert("Free Trial already used or expired");
+    if (plan.id === 0 && trialUsed) {
+      alert("Free Trial already used or expired.");
       return;
     }
 
     alert(`Proceed to buy ${plan.name} plan`);
-    // 🔐 Razorpay / Stripe integration here
+   
   };
 
   if (loading) {
@@ -78,7 +88,7 @@ const Settings = () => {
         {PLANS.map((plan) => {
           const isCurrent = plan.id === currentPlanId;
           const isTrial = plan.id === 0;
-          const isDowngrade = currentPlanId > plan.id;
+          const isTrialDisabled = isTrial && trialUsed;
 
           return (
             <div
@@ -92,14 +102,12 @@ const Settings = () => {
               `}
             >
               {/* Header */}
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="font-semibold text-lg capitalize">
-                  {plan.name}
-                </h3>
-              </div>
+              <h3 className="font-semibold text-lg capitalize mb-3">
+                {plan.name}
+              </h3>
 
               {/* Modules */}
-              <ul className="pl-2 space-y-1 mb-4 text-sm">
+              <ul className="space-y-1 mb-4 text-sm">
                 {MODULES.map((moduleName, index) => {
                   const moduleId = index + 1;
                   const included = plan.modules.includes(moduleId);
@@ -107,7 +115,7 @@ const Settings = () => {
                   return (
                     <li
                       key={moduleId}
-                      className="flex justify-between items-center border-b border-gray-200 py-1"
+                      className="flex justify-between border-b py-1"
                     >
                       <span
                         className={
@@ -116,11 +124,10 @@ const Settings = () => {
                       >
                         {moduleName}
                       </span>
-
                       <span
-                        className={`font-bold ${
+                        className={
                           included ? "text-green-500" : "text-red-500"
-                        }`}
+                        }
                       >
                         {included ? "✔" : "✖"}
                       </span>
@@ -131,33 +138,32 @@ const Settings = () => {
 
               {/* Action Button */}
               {isCurrent ? (
-              <button
-                disabled
-                className="w-full bg-green-500 text-white py-2 rounded-lg font-semibold cursor-not-allowed"
-              >
-                Current Plan
-              </button>
-            ) : (
-              <button
-                onClick={() => handleBuy(plan)}
-                disabled={isDowngrade}
-                className={`w-full py-2 rounded-lg font-semibold text-white
-                  ${
-                    isTrial
-                      ? "bg-gray-600 hover:bg-gray-700"
-                      : "bg-[#00bcd4] hover:bg-[#00acc1]"
-                  }
-                  ${isDowngrade ? "opacity-50 cursor-not-allowed" : ""}
-                `}
-              >
-                {isDowngrade
-                  ? " "
-                  : isTrial
-                  ? "Free Trial"
-                  : "Buy Plan"}
-              </button>
-            )}
-
+                <button
+                  disabled
+                  className="w-full bg-green-500 text-white py-2 rounded-lg font-semibold cursor-not-allowed"
+                >
+                  Current Plan
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleBuy(plan)}
+                  disabled={isTrialDisabled}
+                  className={`w-full py-2 rounded-lg font-semibold text-white
+                    ${
+                      isTrial
+                        ? "bg-gray-600 hover:bg-gray-700"
+                        : "bg-[#00bcd4] hover:bg-[#00acc1]"
+                    }
+                    ${isTrialDisabled ? "opacity-50 cursor-not-allowed" : ""}
+                  `}
+                >
+                  {isTrialDisabled
+                    ? "Trial Used"
+                    : isTrial
+                    ? "Free Trial"
+                    : "Buy Plan"}
+                </button>
+              )}
             </div>
           );
         })}

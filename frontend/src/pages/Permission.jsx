@@ -19,23 +19,35 @@ const Permission = () => {
     fetchUsers();
   }, []);
 
-  const fetchUsers = async () => {
-    try {
-      const token = localStorage.getItem("AUTH_TOKEN");
-      if (!token) throw new Error("Token missing");
+const fetchUsers = async () => {
+  try {
+    const token = localStorage.getItem("AUTH_TOKEN");
+    if (!token) throw new Error("Token missing");
 
-      const res = await fetch(`${API_BASE}/users`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+    const res = await fetch(`${API_BASE}/users`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    // If trial expired for the current logged-in user
+    if (res.status === 403) {
       const data = await res.json();
-      setUsers(data.users || []);
-    } catch (err) {
-      console.error(err);
-      setError("Failed to load users");
-    } finally {
-      setLoading(false);
+      if (data.error === "FREE_TRIAL_EXPIRED") {
+        alert("⚠️ Your free trial has ended. Please upgrade your plan.");
+        navigate("/i-beauty/add-plan");
+        return;
+      }
     }
-  };
+
+    const data = await res.json();
+    setUsers(data.users || []);
+  } catch (err) {
+    console.error(err);
+    setError("Failed to load users");
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   // ---------------- OPEN PANEL ----------------
   const openPanel = (user) => {

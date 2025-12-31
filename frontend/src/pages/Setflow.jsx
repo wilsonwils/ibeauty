@@ -11,6 +11,9 @@ import RoutinePage from "./RoutinePage";
 import SuggestProduct from "./SuggestProduct";
 import { permissionService } from "../services/permissionService";
 import { label } from "three/tsl";
+import { useTrial } from "../context/TrialContext";
+
+
 const Setflow = () => {
     const getUserKey = (key) => {
     const userId = localStorage.getItem("userId");
@@ -455,6 +458,18 @@ const steps = permittedFlow.map((s) => s.label);
 const contents = permittedFlow.map((s, i) =>
   React.cloneElement(s.render, { key: i })
 );
+
+const { trialExpired, setShowPopup } = useTrial();
+
+const guardAction = (action) => {
+  if (trialExpired) {
+    setShowPopup(true);   // show popup
+    return;               // STOP action
+  }
+  action();               // run original logic
+};
+
+
   // ==================================================
   // RENDER
   // ==================================================
@@ -487,36 +502,41 @@ return (
 
         {contents[activeIndex]}
 
-        <div className="flex justify-end gap-3 mt-6">
-          {activeIndex > 0 && (
-            <button
-              onClick={() => setActiveIndex(activeIndex - 1)}
-              className="px-4 py-2 bg-[#00bcd4] text-white rounded"
-            >
-              Previous
-            </button>
-          )}
+<div className="flex justify-end gap-3 mt-6">
+  {activeIndex > 0 && (
+    <button
+      onClick={() =>
+        guardAction(() => setActiveIndex(activeIndex - 1))
+      }
+      className="px-4 py-2 bg-[#00bcd4] text-white rounded"
+    >
+      Previous
+    </button>
+  )}
 
-          {activeIndex !== steps.length - 1 && (
-            <button
-              onClick={goSkip}
-              className="px-4 py-2 bg-yellow-400 rounded"
-            >
-              Skip & Next
-            </button>
-          )}
+  {activeIndex !== steps.length - 1 && (
+    <button
+      onClick={() => guardAction(goSkip)}
+      className="px-4 py-2 bg-yellow-400 rounded"
+    >
+      Skip & Next
+    </button>
+  )}
 
-          <button
-            onClick={
-              activeIndex === steps.length - 1
-                ? handleFinalSave
-                : handleSaveNext
-            }
-            className="px-4 py-2 bg-[#00bcd4] text-white rounded"
-          >
-            {activeIndex === steps.length - 1 ? "Save" : "Save & Next"}
-          </button>
-        </div>
+  <button
+    onClick={() =>
+      guardAction(
+        activeIndex === steps.length - 1
+          ? handleFinalSave
+          : handleSaveNext
+      )
+    }
+    className="px-4 py-2 bg-[#00bcd4] text-white rounded"
+  >
+    {activeIndex === steps.length - 1 ? "Save" : "Save & Next"}
+  </button>
+</div>
+
       </div>
     </div>
   );

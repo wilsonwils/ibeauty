@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { MODULES, PLAN_SIGNATURES } from "../config/module";
 import { API_BASE } from "../utils/api";
@@ -18,7 +18,7 @@ const AddPlan = () => {
   const [selectedModules, setSelectedModules] = useState({});
   const [loading, setLoading] = useState(false);
 
-  /* ❌ NO USER SAFETY */
+  /* NO USER */
   if (!user) {
     return (
       <p className="p-6 text-center text-red-500">
@@ -27,7 +27,7 @@ const AddPlan = () => {
     );
   }
 
-  /* 🔄 MODULE TOGGLE */
+  /* MODULE TOGGLE */
   const handleToggleModule = (planId, moduleId) => {
     setSelectedModules((prev) => {
       const prevModules = prev[planId] || [];
@@ -40,61 +40,68 @@ const AddPlan = () => {
     });
   };
 
-  /* ➕ ADD PLAN */
-  const handleAddPlan = async (planName, planId) => {
-    const token = localStorage.getItem("AUTH_TOKEN");
-    if (!token) {
-      alert("Authorization token missing!");
+  /* ==================== ADD PLAN FUNCTION ==================== */
+const handleAddPlan = async (planName, planId) => {
+  const token = localStorage.getItem("AUTH_TOKEN");
+  if (!token) {
+    alert("Authorization token missing!");
+    return;
+  }
+
+  const payload = {
+    user_id: user.id,
+    organization_id: user.organization_id,
+    plan_id: planId,
+    customized_module_id: selectedModules[planId] || [],
+  };
+
+  setLoading(true);
+
+  try {
+    const res = await fetch(`${API_BASE}/add-plan`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      // Trial-specific errors
+      if (planId === 0 && data?.error === "FREE_TRIAL_EXPIRED") {
+        alert("⚠️ Your free trial has ended. Please upgrade your plan.");
+        navigate("/settings");
+        return;
+      }
+      if (planId === 0 && data?.error === "FREE_TRIAL_ALREADY_USED") {
+        alert("⚠️ Free trial already used. Please purchase a paid plan.");
+        navigate("/settings");
+        return;
+      }
+
+      // Other errors
+      alert(data?.error || "Something went wrong");
       return;
     }
 
-    const payload = {
-      user_id: user.id,
-      organization_id: user.organization_id,
-      plan_id: planId,
-      customized_module_id: selectedModules[planId] || [],
-    };
+    // ---------------- UPDATE FRONTEND STATE ----------------
+    const updatedPlan = data.plan;
+    console.log("Updated plan:", updatedPlan);
 
-    setLoading(true);
 
-    try {
-      const res = await fetch(`${API_BASE}/add-plan`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
 
-      const data = await res.json();
+    alert(`Plan "${planName}" added successfully`);
+    navigate("/i-beauty/organization-permission");
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    setLoading(false);
+  }
+};
 
-      /* 🚫 TRIAL ERROR HANDLER (FIXED) */
-      if (!res.ok) {
-        if (
-          data?.error === "FREE_TRIAL_EXPIRED" ||
-          (typeof data?.error === "string" &&
-            data.error.toLowerCase().includes("free trial"))
-        ) {
-          alert(data.error);
-          navigate("/settings");
-          return;
-        }
-
-        throw new Error(data.error || "Failed to add plan");
-      }
-
-      alert(`Plan "${planName}" added successfully`);
-      navigate("/i-beauty/organization-permission");
-
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  /* 🧩 UI */
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
       <h2 className="text-2xl font-bold">
@@ -155,9 +162,7 @@ const AddPlan = () => {
                 disabled={loading}
                 className="w-full bg-[#00bcd4] text-white py-2 rounded font-semibold hover:bg-[#00acc1] disabled:opacity-50"
               >
-                {plan.name.toLowerCase() === "trial"
-                  ? "Free Trial"
-                  : "Add Plan"}
+                {plan.id === 0 ? "Free Trial" : "Add Plan"}
               </button>
             </div>
           );

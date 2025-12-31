@@ -488,6 +488,7 @@ def check_module_access():
         conn.close()
 
 
+
 @auth_bp.get("/my-modules")
 def get_my_modules():
     token = request.headers.get("Authorization")
@@ -499,7 +500,6 @@ def get_my_modules():
     if not payload:
         return jsonify({"error": "Invalid or expired token"}), 401
 
-    
     user_id = payload.get("user_id")
     if not user_id:
         return jsonify({"error": "User ID not found in token"}), 401
@@ -508,23 +508,47 @@ def get_my_modules():
     cur = conn.cursor()
 
     try:
+        # -------- GET PLAN --------
         cur.execute("""
-            SELECT plan_id
+            SELECT plan_id, organization_id
             FROM module_permission
             WHERE user_id = %s
             LIMIT 1
         """, (user_id,))
-
         row = cur.fetchone()
+
+        plan_id = row[0] if row else 0
+        organization_id = row[1] if row else None
+
+        # -------- CHECK TRIAL EXPIRY --------
+        trial_expired = False
+
+        if organization_id:
+            cur.execute("""
+                SELECT trial_end_at
+                FROM organization_modules
+                WHERE organization_id = %s
+                LIMIT 1
+            """, (organization_id,))
+            trial_row = cur.fetchone()
+
+            if trial_row and trial_row[0]:
+                now = datetime.now(timezone.utc)
+                if now >= trial_row[0]:
+                    trial_expired = True
 
         return jsonify({
             "status": "success",
-            "plan_id": row[0] if row else None
-        })
+            "plan_id": plan_id,
+            "trial_expired": trial_expired
+        }), 200
 
     finally:
         cur.close()
         conn.close()
+
+
+
 
 @auth_bp.post("/update-modules")
 def update_modules():
@@ -596,54 +620,62 @@ def add_plan_to_user():
     user_id = data.get("user_id")
     plan_id = data.get("plan_id")
     customized_modules = data.get("customized_module_id", [])
+    organization_id = data.get("organization_id")
 
     if user_id is None or plan_id is None:
-        return jsonify({"error": "Missing required fields", "received": data}), 400
+        return jsonify({"error": "Missing required fields"}), 400
 
     conn = get_connection()
     cur = conn.cursor()
 
     try:
         # ---------------- GET ORGANIZATION ----------------
-        organization_id = data.get("organization_id")
-        if organization_id is None:
-            cur.execute("SELECT organization_id FROM users WHERE id = %s", (user_id,))
+        if not organization_id:
+            cur.execute(
+                "SELECT organization_id FROM users WHERE id = %s",
+                (user_id,)
+            )
             row = cur.fetchone()
             if not row:
                 return jsonify({"error": "User not found"}), 400
             organization_id = row[0]
 
-        # 🔴 ADDED: FREE TRIAL EXPIRED WARNING (AFTER 15 DAYS)
+        # ---------------- GET TRIAL INFO ----------------
         cur.execute("""
-            SELECT trial_end_at
+            SELECT trial_start_at, trial_end_at
             FROM organization_modules
             WHERE organization_id = %s
         """, (organization_id,))
-        trial_check = cur.fetchone()
+        trial_row = cur.fetchone()
 
-        if trial_check and trial_check[0] is not None:
-            now = datetime.now(timezone.utc)
-            if now > trial_check[0]:
-                return jsonify({
-                    "error": "FREE_TRIAL_EXPIRED",
-                    "message": "Free trial has expired"
-                }), 403
+        now = datetime.now(timezone.utc)
 
-        # ---------------- GET PLAN MODULE DEFAULT ----------------
-        cur.execute(
-            "SELECT module_permission_default FROM module_payment_plan WHERE id = %s",
-            (plan_id,)
-        )
+        # 🚫 BLOCK EXPIRED TRIAL (ONLY FOR TRIAL PLAN)
+        if plan_id == 0 and trial_row and trial_row[1] and now >= trial_row[1]:
+            return jsonify({"error": "FREE_TRIAL_EXPIRED"}), 403
+
+        # 🚫 BLOCK REUSED TRIAL
+        if plan_id == 0 and trial_row and trial_row[0]:
+            return jsonify({"error": "FREE_TRIAL_ALREADY_USED"}), 403
+
+        # ---------------- GET PLAN DEFAULT MODULES ----------------
+        cur.execute("""
+            SELECT module_permission_default
+            FROM module_payment_plan
+            WHERE id = %s
+        """, (plan_id,))
         row = cur.fetchone()
         if not row:
             return jsonify({"error": "Invalid plan_id"}), 400
+
         module_management_id = row[0]
 
         # ---------------- UPSERT MODULE PERMISSION ----------------
-        cur.execute(
-            "SELECT id FROM module_permission WHERE user_id = %s AND organization_id = %s",
-            (user_id, organization_id)
-        )
+        cur.execute("""
+            SELECT id
+            FROM module_permission
+            WHERE user_id = %s AND organization_id = %s
+        """, (user_id, organization_id))
         exists = cur.fetchone()
 
         if exists:
@@ -688,25 +720,18 @@ def add_plan_to_user():
             ))
             message = "Plan added successfully"
 
-        # ---------------- FREE TRIAL LOGIC ----------------
+        # ---------------- CREATE FREE TRIAL (ONLY ONCE) ----------------
         if plan_id == 0:
-            cur.execute(
-                "SELECT id, trial_start_at FROM organization_modules WHERE organization_id = %s",
-                (organization_id,)
-            )
-            trial_row = cur.fetchone()
-
-            trial_start_at = datetime.now(timezone.utc)
+            trial_start_at = now
             trial_end_at = trial_start_at + timedelta(days=15)
 
             if trial_row:
-                if trial_row[1] is not None:
-                    return jsonify({"error": "Free trial already used. Please purchase a paid plan."}), 403
                 cur.execute("""
                     UPDATE organization_modules
-                    SET trial_start_at = %s, trial_end_at = %s
-                    WHERE id = %s
-                """, (trial_start_at, trial_end_at, trial_row[0]))
+                    SET trial_start_at = %s,
+                        trial_end_at = %s
+                    WHERE organization_id = %s
+                """, (trial_start_at, trial_end_at, organization_id))
             else:
                 cur.execute("""
                     INSERT INTO organization_modules (
@@ -722,12 +747,14 @@ def add_plan_to_user():
     except Exception as e:
         conn.rollback()
         print("ADD PLAN ERROR:", e)
-        return jsonify({"error": "Server error", "details": str(e)}), 500
+        return jsonify({
+            "error": "Server error",
+            "details": str(e)
+        }), 500
 
     finally:
         cur.close()
         conn.close()
-
 
 
 
@@ -774,14 +801,33 @@ def get_all_users():
 
         users = []
         for r in rows:
+            user_id = r[0]
+            organization_id = r[1]
+            plan_name = r[6] or "-"
+
+            # ---------------- CHECK TRIAL EXPIRY ----------------
+            trial_expired = False
+            if plan_name.lower() == "trial":
+                cur.execute("""
+                    SELECT trial_end_at
+                    FROM organization_modules
+                    WHERE organization_id = %s
+                    LIMIT 1
+                """, (organization_id,))
+                trial_row = cur.fetchone()
+                if trial_row and trial_row[0]:
+                    now = datetime.now(timezone.utc)
+                    trial_expired = now >= trial_row[0]
+
             users.append({
-                "id": r[0],
-                "organization_id": r[1],
+                "id": user_id,
+                "organization_id": organization_id,
                 "full_name": r[2],
                 "email": r[3],
                 "phone": r[4],
                 "organization_name": r[5] or "",
-                "plan": r[6] or "-",
+                "plan": plan_name if not trial_expired else "-",  # show "-" if trial expired
+                "trial_expired": trial_expired,
                 "default_module_id": r[7] or [],
                 "customized_module_id": r[8] or [],
             })
@@ -789,7 +835,7 @@ def get_all_users():
         return jsonify({"users": users}), 200
 
     except Exception as e:
-        print(" Error fetching users:", e)
+        print("Error fetching users:", e)
         return jsonify({"error": "Server error"}), 500
 
     finally:

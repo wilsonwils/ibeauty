@@ -1,30 +1,36 @@
 import Sidebar from "../components/Sidebar";
 import Header from "../components/Header";
+import TrialPopup from "../components/TrialPopup";
+import { useTrial } from "../context/TrialContext";
 
 const Layout = ({ children, hideHeader = false }) => {
+  const { trialExpired, setShowPopup } = useTrial();
+
+  const handleClick = (e) => {
+    if (!trialExpired) return; // Only block if trial ended
+
+    const target = e.target.closest("button, input, select, textarea, label");
+    if (target) {
+      e.preventDefault();
+      e.stopPropagation();
+      setShowPopup(true);
+    }
+  };
+
   return (
-    <div className="flex bg-[#f7f8fa] min-h-screen">
-
-      {/* Sidebar */}
+    <div
+      className="flex bg-[#f7f8fa] min-h-screen"
+      onClick={handleClick} // intercept in-page actions
+    >
       <Sidebar />
-
-      {/* Main Area */}
       <div className="flex flex-col w-full ml-[200px]">
-
-        {/* Shared Width Container */}
         <div className="max-w-[1400px] w-full mx-auto px-6">
-
-          {/* Header (only hide when hideHeader=true) */}
           {!hideHeader && <Header />}
-
-          {/* Page Content */}
-          <div className="pt-6">
-            {children}
-          </div>
-
+          <div className="pt-6">{children}</div>
         </div>
-
       </div>
+
+      <TrialPopup />
     </div>
   );
 };
