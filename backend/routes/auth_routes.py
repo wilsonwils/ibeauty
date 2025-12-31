@@ -7,9 +7,6 @@ import jwt
 from passlib.hash import bcrypt
 import json
 import traceback
-
-
-
 from database import get_connection
 from utils.password_utils import verify_password
 from utils.recaptcha import USE_RECAPTCHA, RECAPTCHA_SECRET
@@ -153,9 +150,14 @@ def get_profile(user_id):
     cur = conn.cursor()
     
     try:
-        # Get user info with organization
         cur.execute("""
-            SELECT u.id, u.full_name, u.email, u.phone, o.name AS organization_name
+            SELECT 
+                u.id,
+                u.full_name,
+                u.email,
+                u.phone,
+                o.name AS organization_name,
+                o.organization_whatsapp
             FROM users u
             LEFT JOIN organizations o ON u.organization_id = o.id
             WHERE u.id = %s
@@ -170,10 +172,11 @@ def get_profile(user_id):
             "fullName": row[1],
             "email": row[2],
             "phone": row[3],
-            "organization": row[4]
+            "organization": row[4],
+            "whatsapp": row[5] 
         }
 
-        # Split full_name into first and last name
+        # Split full_name
         if user_data["fullName"]:
             parts = user_data["fullName"].split(" ", 1)
             user_data["firstName"] = parts[0]
@@ -189,7 +192,6 @@ def get_profile(user_id):
         conn.close()
 
 
-
 @auth_bp.put("/update-profile")
 def update_profile():
     data = request.json or {}
@@ -197,8 +199,9 @@ def update_profile():
     user_id = data.get("user_id")
     first = data.get("firstName")
     last = data.get("lastName")
-    phone = data.get("phone")  # keep phone
-    organization_name = data.get("organization")  # optional
+    phone = data.get("phone")
+    organization_name = data.get("organization")
+    organization_whatsapp = data.get("whatsapp") 
 
     if not user_id:
         return jsonify({"status": "error", "message": "User ID required"}), 400
@@ -212,7 +215,7 @@ def update_profile():
     cur = conn.cursor()
 
     try:
-        # Get organization_id for this user
+        # Get organization_id
         cur.execute("""
             SELECT organization_id
             FROM users
@@ -225,7 +228,7 @@ def update_profile():
 
         organization_id = row[0]
 
-        # Update users table (without password)
+        #  Update users table
         cur.execute("""
             UPDATE users
             SET full_name = %s,
@@ -233,13 +236,15 @@ def update_profile():
             WHERE id = %s
         """, (full_name, phone, user_id))
 
-        # Update organization name if provided
-        if organization_name:
+        #  Update organization (NAME + WHATSAPP)
+        if organization_id:
             cur.execute("""
                 UPDATE organizations
-                SET name = %s
+                SET 
+                    name = COALESCE(%s, name),
+                    organization_whatsapp = %s
                 WHERE id = %s
-            """, (organization_name, organization_id))
+            """, (organization_name, organization_whatsapp, organization_id))
 
         conn.commit()
 
@@ -385,25 +390,25 @@ def get_user(user_id):
 # ---------------------------------------------
 @auth_bp.get("/modules")
 def get_modules():
-    # 1️⃣ Read token from Authorization header
+    #  Read token from Authorization header
     token = request.headers.get("Authorization")
 
     if not token:
         return jsonify({"error": "Token required"}), 401
 
-    # 2️⃣ Clean token
+    #  Clean token
     token = token.replace("Bearer ", "").strip()
 
-    # 3️⃣ Verify token
+    #  Verify token
     payload = decode_token(token)
     if not payload:
         return jsonify({"error": "Invalid or expired token"}), 401
 
-    # 4️⃣ Extract user + org from token
+    #  Extract user + org from token
     user_id = payload.get("user_id")
     organization_id = payload.get("organization_id")
 
-    # 5️⃣ Query DB
+
     conn = get_connection()
     cur = conn.cursor()
 
@@ -650,11 +655,11 @@ def add_plan_to_user():
 
         now = datetime.now(timezone.utc)
 
-        # 🚫 BLOCK EXPIRED TRIAL (ONLY FOR TRIAL PLAN)
+        # BLOCK EXPIRED TRIAL (ONLY FOR TRIAL PLAN)
         if plan_id == 0 and trial_row and trial_row[1] and now >= trial_row[1]:
             return jsonify({"error": "FREE_TRIAL_EXPIRED"}), 403
 
-        # 🚫 BLOCK REUSED TRIAL
+        # BLOCK REUSED TRIAL
         if plan_id == 0 and trial_row and trial_row[0]:
             return jsonify({"error": "FREE_TRIAL_ALREADY_USED"}), 403
 

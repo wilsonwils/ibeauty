@@ -12,8 +12,9 @@ const EditProfile = () => {
   const [email, setEmail] = useState("");
   const [organization, setOrganization] = useState("");
   const [phone, setPhone] = useState("");
-  const [logo, setLogo] = useState(""); // base64 or URL from backend
-  const [logoPreview, setLogoPreview] = useState(""); // preview image
+  const [whatsapp, setWhatsapp] = useState(""); 
+  const [logo, setLogo] = useState("");
+  const [logoPreview, setLogoPreview] = useState("");
 
   const fileInputRef = useRef(null);
 
@@ -33,6 +34,8 @@ const EditProfile = () => {
           setEmail(u.email || "");
           setOrganization(u.organization || "");
           setPhone(u.phone || "");
+          setWhatsapp(u.whatsapp || ""); 
+
           if (u.logo) {
             setLogo(u.logo);
             setLogoPreview(u.logo);
@@ -52,6 +55,8 @@ const EditProfile = () => {
       setEmail(user.email || "");
       setOrganization(user.organization || "");
       setPhone(user.phone || "");
+      setWhatsapp(user.whatsapp || ""); 
+
       if (user.logo) {
         setLogo(user.logo);
         setLogoPreview(user.logo);
@@ -87,6 +92,7 @@ const EditProfile = () => {
         lastName,
         organization,
         phone,
+        whatsapp,
         logo,
       };
 
@@ -111,6 +117,7 @@ const EditProfile = () => {
   return (
     <div className="bg-white p-6 rounded shadow-md max-w-6xl mx-auto">
       <h1 className="text-2xl font-semibold mb-6">Edit Profile</h1>
+
       <form onSubmit={handleSubmit} className="flex flex-col gap-6">
         {/* First Row */}
         <div className="flex flex-wrap gap-4">
@@ -150,7 +157,9 @@ const EditProfile = () => {
         {/* Second Row */}
         <div className="flex flex-wrap gap-4 items-end">
           <div className="flex-1 min-w-[200px]">
-            <label className="block text-gray-700 mb-1">Organization Name</label>
+            <label className="block text-gray-700 mb-1">
+              Organization Name
+            </label>
             <input
               type="text"
               value={organization}
@@ -168,12 +177,28 @@ const EditProfile = () => {
               className="w-full border p-2 rounded"
             />
           </div>
+
+         
+          <div className="flex-1 min-w-[200px]">
+            <label className="block text-gray-700 mb-1">
+              Organization WhatsApp
+            </label>
+            <input
+              type="text"
+              value={whatsapp}
+              onChange={(e) => setWhatsapp(e.target.value)}
+              className="w-full border p-2 rounded"
+            />
+          </div>
         </div>
 
-        {/* Third Row: Organization Logo */}
+        {/* Logo */}
         <div className="flex flex-wrap gap-4 items-center mt-4">
           <div className="flex-1 min-w-[200px]">
-            <label className="block text-gray-700 mb-1">Organization Logo</label>
+            <label className="block text-gray-700 mb-1">
+              Organization Logo
+            </label>
+
             <div className="flex flex-col items-start gap-2">
               {logoPreview ? (
                 <img
@@ -186,6 +211,7 @@ const EditProfile = () => {
                   No Logo
                 </div>
               )}
+
               <button
                 type="button"
                 onClick={handleLogoClick}
@@ -193,6 +219,7 @@ const EditProfile = () => {
               >
                 Change Logo
               </button>
+
               <input
                 type="file"
                 accept="image/*"
