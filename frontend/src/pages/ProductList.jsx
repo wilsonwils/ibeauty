@@ -35,6 +35,8 @@ const ProductList = () => {
   // Soft warning
   const [warning, setWarning] = useState("");
 
+  
+
 const trialGuard = (action) => {
   if (trialExpired) {
     setShowPopup(true);
@@ -161,6 +163,88 @@ const confirmDelete = async () => {
   const startIndex = (currentPage - 1) * itemsPerPage;
   const currentProducts = filteredProducts.slice(startIndex, startIndex + itemsPerPage);
 
+
+const downloadTemplate = async () => {
+  if (trialExpired) {
+    setShowPopup(true);
+    return;
+  }
+
+  try {
+    //  Fetch DB values
+    const [ptRes, stRes] = await Promise.all([
+      api("/product_types"),
+      api("/skin_types"),
+    ]);
+
+    const productTypes = await ptRes.json(); 
+    const skinTypes = await stRes.json();     
+
+    // ================= INSTRUCTION ROW =================
+    const instructionRow = [
+      {
+        sku: "",
+        product_name: "",
+        variant_id: "",
+        brand: "",
+        amount: "",
+        stock: "",
+        major_usp: "",
+        description: "",
+        concerns: "",
+        product_types: `(${productTypes.join(",")})`,
+        skin_types: `(${skinTypes.join(",")})`,
+        gender: "(Male,Female,Transgender)",
+        age: "",
+        time_session: "(AM,PM)",
+      },
+    ];
+
+    // ================= PRODUCT ROWS =================
+    const productRows = products.map((p) => ({
+      sku: p.sku || "",
+      product_name: p.productName || p.name || "",
+      variant_id: "",
+      brand: "",
+      amount: "",
+      stock: "",
+      major_usp: "",
+      description: "",
+      concerns: "",
+      product_types: "",
+      skin_types: "",
+      gender: "",
+      age: "",
+      time_session: "",
+    }));
+
+    const sheetData = [...instructionRow, ...productRows];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.json_to_sheet(sheetData),
+      "Bulk Template"
+    );
+
+    const excelBuffer = XLSX.write(wb, {
+      bookType: "xlsx",
+      type: "array",
+    });
+
+    saveAs(
+      new Blob([excelBuffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      }),
+      "product_bulk_template.xlsx"
+    );
+  } catch (err) {
+    console.error("Template download failed", err);
+  }
+};
+
+
+
   // Export Excel
   const exportToExcel = () => {
   if (trialExpired) {
@@ -237,7 +321,7 @@ const confirmDelete = async () => {
 
  
 const deleteSelected = () => {
-  // ✅ First, check trial expired
+
   if (trialExpired) {
     setShowPopup(true);
     return;
@@ -273,6 +357,13 @@ const deleteSelected = () => {
         <h2 className="text-xl font-semibold">Product List</h2>
 
         <div className="flex items-center gap-3">
+
+          <button
+            onClick={() => trialGuard(downloadTemplate)}
+            className="border px-4 py-2 rounded-md hover:bg-gray-100"
+          >
+            Download Template
+          </button>
           
           {/* DELETE ALL BUTTON */}
           <button
