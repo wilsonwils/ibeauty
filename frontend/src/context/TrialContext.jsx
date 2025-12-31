@@ -34,7 +34,7 @@ export const TrialProvider = ({ children }) => {
         data.trial_expired === true;
 
       setTrialExpired(expired);
-      setShowPopup(expired); // ✅ ALWAYS show if expired
+      setShowPopup(expired); 
     } catch (err) {
       console.error("Trial check failed", err);
       setTrialExpired(false);
