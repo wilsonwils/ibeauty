@@ -13,7 +13,14 @@ export const TrialProvider = ({ children }) => {
   const fetchTrialStatus = async () => {
     try {
       const token = localStorage.getItem("AUTH_TOKEN");
-      if (!token) return;
+
+      // logout → reset
+      if (!token) {
+        setTrialExpired(false);
+        setShowPopup(false);
+        setLoading(false);
+        return;
+      }
 
       const res = await fetch(`${API_BASE}/my-modules`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -21,27 +28,26 @@ export const TrialProvider = ({ children }) => {
 
       const data = await res.json();
 
-
-      if (
+      const expired =
         data.status === "success" &&
         data.plan_id === 0 &&
-        data.trial_expired === true
-      ) {
-        setTrialExpired(true);
-      } else {
-        setTrialExpired(false);
-      }
+        data.trial_expired === true;
+
+      setTrialExpired(expired);
+      setShowPopup(expired); // ✅ ALWAYS show if expired
     } catch (err) {
       console.error("Trial check failed", err);
       setTrialExpired(false);
+      setShowPopup(false);
     } finally {
       setLoading(false);
     }
   };
 
+  // re-check on login / logout
   useEffect(() => {
     fetchTrialStatus();
-  }, []);
+  }, [localStorage.getItem("AUTH_TOKEN")]);
 
   return (
     <TrialContext.Provider
@@ -50,7 +56,7 @@ export const TrialProvider = ({ children }) => {
         loading,
         showPopup,
         setShowPopup,
-        refreshTrialStatus: fetchTrialStatus, 
+        refreshTrialStatus: fetchTrialStatus,
       }}
     >
       {children}
