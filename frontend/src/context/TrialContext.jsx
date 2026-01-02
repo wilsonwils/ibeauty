@@ -1,27 +1,26 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { API_BASE } from "../utils/api";
+import { useUser } from "./UserContext"; 
 
 const TrialContext = createContext();
-
 export const useTrial = () => useContext(TrialContext);
 
 export const TrialProvider = ({ children }) => {
+  const { user, token } = useUser(); 
+
   const [trialExpired, setTrialExpired] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showPopup, setShowPopup] = useState(false);
 
   const fetchTrialStatus = async () => {
+    if (!user || !token) {
+      setTrialExpired(false);
+      setShowPopup(false);
+      setLoading(false);
+      return;
+    }
+
     try {
-      const token = localStorage.getItem("AUTH_TOKEN");
-
-      // logout → reset
-      if (!token) {
-        setTrialExpired(false);
-        setShowPopup(false);
-        setLoading(false);
-        return;
-      }
-
       const res = await fetch(`${API_BASE}/my-modules`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -34,7 +33,7 @@ export const TrialProvider = ({ children }) => {
         data.trial_expired === true;
 
       setTrialExpired(expired);
-      setShowPopup(expired); 
+      setShowPopup(expired);
     } catch (err) {
       console.error("Trial check failed", err);
       setTrialExpired(false);
@@ -44,10 +43,10 @@ export const TrialProvider = ({ children }) => {
     }
   };
 
-  // re-check on login / logout
+  
   useEffect(() => {
     fetchTrialStatus();
-  }, [localStorage.getItem("AUTH_TOKEN")]);
+  }, [user?.id, token]);
 
   return (
     <TrialContext.Provider

@@ -3,6 +3,8 @@ from database import get_connection
 from datetime import datetime
 import json
 from routes.auth_routes import decode_token
+
+
 flow_bp = Blueprint("flow", __name__)
 # -------------------------------------------------------------------
 # CREATE FLOW
@@ -71,6 +73,8 @@ def create_flow():
         cur.close()
         conn.close()
 
+
+
 @flow_bp.post("/save_landing_page")
 def save_landing_page():
     auth = request.headers.get("Authorization")
@@ -127,6 +131,8 @@ def save_landing_page():
     finally:
         cur.close()
         conn.close()
+
+
 
 # ----------------------------------------------------
 # SAVE QUESTIONNAIRE (FRONTEND YES/NO MAPPED)
@@ -228,6 +234,8 @@ def save_questionaire():
         conn.close()
 
 
+
+
 @flow_bp.post("/save_capture_page")
 def save_capture_page():
     auth = request.headers.get("Authorization")
@@ -301,6 +309,8 @@ def save_capture_page():
     finally:
         cur.close()
         conn.close()
+
+
 
 
 @flow_bp.post("/save_contact_page")
@@ -491,6 +501,8 @@ def save_segmentation():
         cur.close()
         conn.close()
 
+
+
 @flow_bp.post("/save_skingoal")
 def save_skingoal():
     auth = request.headers.get("Authorization")
@@ -577,6 +589,7 @@ def save_skingoal():
         conn.close()
 
 
+
 @flow_bp.post("/save_summary")
 def save_summary():
     auth = request.headers.get("Authorization")
@@ -601,7 +614,7 @@ def save_summary():
 
     if not skip and not summary_fields:
         return jsonify({
-            "error": "Please select Yes or No for all summary options"
+            "error": "please select yes or no for all summary options"
         }), 400
 
     conn = get_connection()
@@ -694,6 +707,8 @@ def save_suggestproduct():
 
         if not cur.fetchone():
             return jsonify({"error": "Invalid flow or unauthorized"}), 403
+        
+        
 
         # ---------- CONVERT TO JSONB ----------
         field_data = {}
