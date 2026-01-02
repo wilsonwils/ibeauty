@@ -72,12 +72,12 @@ const handleAddPlan = async (planName, planId) => {
     if (!res.ok) {
       // Trial-specific errors
       if (planId === 0 && data?.error === "FREE_TRIAL_EXPIRED") {
-        alert("⚠️ Your free trial has ended. Please upgrade your plan.");
+        alert("Your free trial has ended. Please upgrade your plan.");
         navigate("/settings");
         return;
       }
       if (planId === 0 && data?.error === "FREE_TRIAL_ALREADY_USED") {
-        alert("⚠️ Free trial already used. Please purchase a paid plan.");
+        alert("Free trial already used. Please purchase a paid plan.");
         navigate("/settings");
         return;
       }
