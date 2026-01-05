@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { FiEdit, FiTrash2, FiLink2, FiPlus, FiFilter } from "react-icons/fi";
 import { useNavigate } from "react-router-dom";
 import { api, API_BASE } from "../utils/api";
@@ -34,6 +34,8 @@ const ProductList = () => {
 
   // Soft warning
   const [warning, setWarning] = useState("");
+
+  const fileInputRef = useRef(null);
 
   
 
@@ -79,6 +81,11 @@ const fetchProducts = async () => {
   useEffect(() => {
     fetchProducts();
   }, []);
+  
+    const handleUploadClick = () => {
+    fileInputRef.current.click(); // trigger hidden file input
+  };
+  
 
   const handleAddProduct = () => {
     navigate("/i-beauty/add-product");
@@ -197,28 +204,30 @@ const downloadTemplate = async () => {
         gender: "(Male,Female,Transgender)",
         age: "",
         time_session: "(AM,PM)",
+        image_url: "",
       },
     ];
 
     // ================= PRODUCT ROWS =================
-    const productRows = products.map((p) => ({
-      sku: p.sku || "",
-      product_name: p.productName || p.name || "",
-      variant_id: "",
-      brand: "",
-      amount: "",
-      stock: "",
-      major_usp: "",
-      description: "",
-      concerns: "",
-      product_types: "",
-      skin_types: "",
-      gender: "",
-      age: "",
-      time_session: "",
-    }));
+    // const productRows = products.map((p) => ({
+    //   sku: p.sku || "",
+    //   product_name: p.productName || p.name || "",
+    //   variant_id: "",
+    //   brand: "",
+    //   amount: "",
+    //   stock: "",
+    //   major_usp: "",
+    //   description: "",
+    //   concerns: "",
+    //   product_types: "",
+    //   skin_types: "",
+    //   image_url: "",
+    //   gender: "",
+    //   age: "",
+    //   time_session: "",
+    // }));
 
-    const sheetData = [...instructionRow, ...productRows];
+    const sheetData = [...instructionRow];
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(
@@ -244,6 +253,64 @@ const downloadTemplate = async () => {
 };
 
 
+const uploadExcel = async (e) => {
+  if (trialExpired) {
+    setShowPopup(true);
+    return;
+  }
+
+  const file = e.target.files[0];
+  if (!file) return;
+
+  try {
+    //  Read Excel file
+    const data = await file.arrayBuffer();
+    const workbook = XLSX.read(data);
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    const jsonData = XLSX.utils.sheet_to_json(sheet);
+
+    //  Map Excel headers to backend keys (matches template)
+    const productsPayload = jsonData.map((row) => ({
+      name: row["product_name"] || "",
+      sku: row["sku"] || "",
+      variant_id: row["variant_id"] || "",
+      brand: row["brand"] || "",
+      description: row["description"] || "",
+      image_url: row["image_url"] || "",
+      amount: row["amount"] || null,
+      stock: row["stock"] || null,
+      gst: row["gst"] || null,
+      major_usp: row["major_usp"] || "",
+      concerns: row["concerns"] || "",
+      product_types: row["product_types"] ? row["product_types"].split(",") : [],
+      skin_types: row["skin_types"] ? row["skin_types"].split(",") : [],
+      gender: row["gender"] ? row["gender"].split(",") : [],
+      age: row["age"] || null,
+      time_session: row["time_session"] ? row["time_session"].split(",") : [],
+    }));
+
+    const res = await api("/bulk-upload-products", {
+      method: "POST",
+      body: JSON.stringify({ products: productsPayload }),
+    });
+
+
+    const resultData = await res.json();
+
+    if (res.ok) {
+      alert("Bulk upload successfully");
+      fetchProducts(); // Refresh product list
+    } else {
+      alert(resultData.error || "Bulk upload failed");
+    }
+  } catch (err) {
+    console.error("Bulk upload failed:", err);
+    alert("Bulk upload failed, check console for details.");
+  }
+};
+
+
 
   // Export Excel
   const exportToExcel = () => {
@@ -256,7 +323,7 @@ const downloadTemplate = async () => {
       SKU: p.sku,
       "Product Name": p.productName || p.name,
       Amount: p.amount,
-      GST: p.gst + "%",
+      // GST: p.gst + "%",
       Stock: p.available_stock || p.stock,
       Status: p.is_active ? "Active" : "Inactive",
     }));
@@ -356,7 +423,7 @@ const deleteSelected = () => {
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl font-semibold">Product List</h2>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1">
 
           <button
             onClick={() => trialGuard(downloadTemplate)}
@@ -364,6 +431,25 @@ const deleteSelected = () => {
           >
             Download Template
           </button>
+
+
+              <>
+                <button
+                  onClick={handleUploadClick}
+                  className="border px-4 py-2 rounded-md hover:bg-gray-100"
+                >
+                  Upload Excel
+                </button>
+
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  ref={fileInputRef}
+                  className="hidden"
+                  onChange={uploadExcel}
+                />
+              </>
+
           
           {/* DELETE ALL BUTTON */}
           <button
@@ -438,7 +524,7 @@ const deleteSelected = () => {
               <th className="p-3 text-left">SKU ID</th>
               <th className="p-3 text-left">Thumbnail / Product Name</th>
               <th className="p-3 text-left">Amount</th>
-              <th className="p-3 text-left">GST</th>
+              {/* <th className="p-3 text-left">GST</th> */}
               <th className="p-3 text-left">Stock</th>
               <th className="p-3 text-left">Status</th>
               <th className="p-3 text-center">Embedded URL</th>
@@ -465,20 +551,28 @@ const deleteSelected = () => {
                   </td>
 
                   <td className="p-3">{p.sku}</td>
+                    <td className="p-3 flex items-center gap-3">
+                      {p.image_url && (
+                        <img
+                          src={
+                            p.image_url.startsWith("http")
+                              ? p.image_url                     // Bulk upload URL
+                              : `${API_BASE}${p.image_url}`     // Manual upload
+                          }
+                          referrerPolicy="no-referrer"
+                          className="w-12 h-12 rounded object-cover"
+                          alt={p.name || p.productName}
+                          onError={(e) => {
+                            e.target.src = "/no-image.png";
+                          }}
+                        />
+                      )}
+                      <span>{p.productName || p.name}</span>
+                    </td>
 
-                  <td className="p-3 flex items-center gap-3">
-                    {p.image_url && (
-                      <img
-                        src={`${API_BASE}${p.image_url}`}
-                        className="w-12 h-12 rounded object-cover"
-                        alt={p.name || p.productName}
-                      />
-                    )}
-                    <span>{p.productName || p.name}</span>
-                  </td>
 
                   <td className="p-3">{p.amount}</td>
-                  <td className="p-3">{p.gst}%</td>
+                  {/* <td className="p-3">{p.gst}%</td> */}
                   <td className="p-3">{p.available_stock || p.stock}</td>
 
                   <td className="p-3 text-green-600">

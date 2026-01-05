@@ -2,7 +2,10 @@ from flask import Blueprint, request, jsonify, send_from_directory
 from database import get_connection
 import secrets, os
 import json
+import pandas as pd
 from routes.auth_routes import decode_token
+import psycopg2
+
 
 product_bp = Blueprint("products", __name__)
 
@@ -147,6 +150,12 @@ def add_product():
             "status": "success",
             "product_id": product_id
         }), 201
+    
+    except psycopg2.errors.UniqueViolation:
+        conn.rollback()
+        return jsonify({
+            "error": "Duplicate SKU. SKU already exists."
+        }), 400
 
     except Exception as e:
         conn.rollback()
@@ -323,6 +332,114 @@ def update_product(product_id):
     finally:
         cur.close()
         conn.close()
+
+
+
+@product_bp.post("/bulk-upload-products")
+def bulk_upload_products():
+    data = request.get_json() or {}
+    products = data.get("products", [])
+    if not products:
+        return jsonify({"error": "No products provided"}), 400
+
+    # Get token from headers
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return jsonify({"error": "Missing or invalid token"}), 401
+
+    token = auth_header.split(" ")[1]
+    user_info = decode_token(token)
+    if not user_info:
+        return jsonify({"error": "Invalid or expired token"}), 401
+
+    organization_id = user_info.get("organization_id")
+    if not organization_id:
+        return jsonify({"error": "Organization not found for the user."}), 400
+
+    # Now proceed with the bulk upload as before
+    conn = get_connection()
+    cur = conn.cursor()
+
+    updated = 0
+    inserted = 0
+
+    try:
+        for prod in products:
+            name = prod.get("name", "").strip()
+            if not name:
+                continue  # skip empty names
+
+            # Check if product exists by name + organization
+            cur.execute(
+                "SELECT id FROM products WHERE LOWER(name) = LOWER(%s) AND organization_id = %s",
+                (name, organization_id)
+            )
+            existing = cur.fetchone()
+
+            values = (
+                name,
+                prod.get("sku"),
+                prod.get("variant_id"),
+                prod.get("brand"),
+                prod.get("description"),
+                prod.get("image_url"),
+                prod.get("amount"),
+                prod.get("stock"),
+                prod.get("gst"),
+                prod.get("major_usp"),
+                prod.get("concerns"),
+                json.dumps(prod.get("product_types", [])),
+                json.dumps(prod.get("skin_types", [])),
+                json.dumps(prod.get("gender", [])),
+                json.dumps(prod.get("age")),
+                json.dumps(prod.get("time_session", [])),
+                organization_id
+            )
+
+            if existing:
+                query = """
+                    UPDATE products SET
+                        name=%s, sku=%s, variant_id=%s, brand=%s, description=%s,
+                        image_url=%s, amount=%s, stock=%s, gst=%s, major_usp=%s,
+                        concerns=%s, product_types=%s, skin_types=%s, gender=%s,
+                        age=%s, time_session=%s, organization_id=%s
+                    WHERE id=%s
+                """
+                cur.execute(query, values + (existing[0],))
+                updated += 1
+            else:
+                query = """
+                    INSERT INTO products (
+                        name, sku, variant_id, brand, description, image_url,
+                        amount, stock, gst, major_usp, concerns,
+                        product_types, skin_types, gender, age, time_session,
+                        organization_id
+                    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                """
+                cur.execute(query, values)
+                inserted += 1
+
+        conn.commit()
+        return jsonify({
+            "message": "Bulk upload successful",
+            "updated": updated,
+            "inserted": inserted
+        }), 200
+
+    except psycopg2.errors.UniqueViolation:
+        conn.rollback()
+        return jsonify({"error": "Duplicate SKU. SKU already exists."}), 400
+
+    except Exception as e:
+        conn.rollback()
+        print("Error:", e)
+        return jsonify({"error": "Bulk upload failed. Please try again."}), 500
+
+    finally:
+        cur.close()
+        conn.close()
+
+
 
 
 @product_bp.get("/product_types")
