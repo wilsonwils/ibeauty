@@ -38,13 +38,9 @@ const Settings = () => {
         const data = await res.json();
 
         if (data.status === "success") {
-          /**
-           * ✅ FIX:
-           * If trial is expired, DO NOT treat it as current plan
-           */
           if (data.plan_id === 0 && data.trial_expired) {
-            setCurrentPlanId(null); // ❌ no active plan
-            setTrialUsed(true);     // 🚫 trial cannot be reused
+            setCurrentPlanId(null); // no active plan
+            setTrialUsed(true);     // trial cannot be reused
           } else {
             setCurrentPlanId(data.plan_id); // active plan
             setTrialUsed(data.plan_id !== 0); // paid plan means trial used
@@ -72,7 +68,7 @@ const Settings = () => {
       return;
     }
 
-    alert(`Proceed to buy ${plan.name} plan`);
+    alert("contact this number 9897876578");
    
   };
 
@@ -88,23 +84,20 @@ const Settings = () => {
         {PLANS.map((plan) => {
           const isCurrent = plan.id === currentPlanId;
           const isTrial = plan.id === 0;
-          const isTrialDisabled = isTrial && trialUsed;
+
+          // Disable conditions
+          const isTrialDisabled = isTrial && trialUsed;               // Trial already used
+          const isPreviousPlan = currentPlanId !== null && plan.id < currentPlanId; // Previous paid plan
+
+          const disabled = isCurrent || isTrialDisabled || isPreviousPlan;
 
           return (
             <div
               key={plan.id}
               className={`border rounded-lg p-4 shadow-sm transition
-                ${
-                  isCurrent
-                    ? "border-green-500 bg-green-50"
-                    : "border-gray-300 bg-white"
-                }
-              `}
+                ${isCurrent ? "border-green-500 bg-green-50" : "border-gray-300 bg-white"}`}
             >
-              {/* Header */}
-              <h3 className="font-semibold text-lg capitalize mb-3">
-                {plan.name}
-              </h3>
+              <h3 className="font-semibold text-lg capitalize mb-3">{plan.name}</h3>
 
               {/* Modules */}
               <ul className="space-y-1 mb-4 text-sm">
@@ -113,22 +106,9 @@ const Settings = () => {
                   const included = plan.modules.includes(moduleId);
 
                   return (
-                    <li
-                      key={moduleId}
-                      className="flex justify-between border-b py-1"
-                    >
-                      <span
-                        className={
-                          included ? "text-black" : "text-gray-500"
-                        }
-                      >
-                        {moduleName}
-                      </span>
-                      <span
-                        className={
-                          included ? "text-green-500" : "text-red-500"
-                        }
-                      >
+                    <li key={moduleId} className="flex justify-between border-b py-1">
+                      <span className={included ? "text-black" : "text-gray-500"}>{moduleName}</span>
+                      <span className={included ? "text-green-500" : "text-red-500"}>
                         {included ? "✔" : "✖"}
                       </span>
                     </li>
@@ -137,36 +117,29 @@ const Settings = () => {
               </ul>
 
               {/* Action Button */}
-              {isCurrent ? (
-                <button
-                  disabled
-                  className="w-full bg-green-500 text-white py-2 rounded-lg font-semibold cursor-not-allowed"
-                >
-                  Current Plan
-                </button>
-              ) : (
-                <button
-                  onClick={() => handleBuy(plan)}
-                  disabled={isTrialDisabled}
-                  className={`w-full py-2 rounded-lg font-semibold text-white
-                    ${
-                      isTrial
-                        ? "bg-gray-600 hover:bg-gray-700"
-                        : "bg-[#00bcd4] hover:bg-[#00acc1]"
-                    }
-                    ${isTrialDisabled ? "opacity-50 cursor-not-allowed" : ""}
-                  `}
-                >
-                  {isTrialDisabled
-                    ? "Trial Used"
-                    : isTrial
-                    ? "Free Trial"
-                    : "Buy Plan"}
-                </button>
-              )}
+              <button
+                onClick={() => !disabled && handleBuy(plan)}
+                disabled={disabled}
+                className={`w-full py-2 rounded-lg font-semibold text-white
+                  ${isCurrent ? "bg-green-500 cursor-not-allowed" : ""}
+                  ${isTrial ? "bg-gray-600 hover:bg-gray-700" : "bg-[#00bcd4] hover:bg-[#00acc1]"}
+                  ${disabled && !isCurrent ? "opacity-50 cursor-not-allowed" : ""}
+                `}
+              >
+                {isCurrent
+                  ? "Current Plan"
+                  : isTrialDisabled
+                  ? "Trial Used"
+                  : isPreviousPlan
+                  ? "Buy Plan"
+                  : isTrial
+                  ? "Free Trial"
+                  : "Buy Plan"}
+              </button>
             </div>
           );
         })}
+
       </div>
     </div>
   );

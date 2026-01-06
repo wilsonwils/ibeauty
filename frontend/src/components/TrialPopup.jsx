@@ -1,20 +1,17 @@
 import { useEffect } from "react";
-import { useTrial } from "../context/TrialContext";
 
-const TrialPopup = () => {
-  const { showPopup, setShowPopup } = useTrial();
-
+const TrialPopup = ({ show, onClose }) => {
   useEffect(() => {
-    if (showPopup) {
-      const timer = setTimeout(() => {
-        setShowPopup(false);
-      }, 3000);
+    if (!show) return;
 
-      return () => clearTimeout(timer);
-    }
-  }, [showPopup]);
+    const timer = setTimeout(() => {
+      onClose();
+    }, 3000);
 
-  if (!showPopup) return null;
+    return () => clearTimeout(timer);
+  }, [show, onClose]);
+
+  if (!show) return null;
 
   return (
     <div className="fixed top-4 left-1/2 -translate-x-1/2 bg-yellow-400 text-black px-4 py-2 rounded shadow-md z-50">

@@ -424,7 +424,7 @@ def get_modules():
             "id": r[0],
             "title": r[1],
             "text": r[2],
-            "bg": '#25afc1',
+            "bg":'#25afc1',
             "shadow": '4'
            
         } for r in rows]

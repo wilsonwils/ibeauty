@@ -1,15 +1,18 @@
 import React, { useEffect, useState, useRef } from "react";
-import { FiEdit, FiTrash2, FiLink2, FiPlus, FiFilter } from "react-icons/fi";
+import { FiEdit, FiTrash2, FiLink2, FiPlus, FiFilter, FiEye } from "react-icons/fi";
 import { useNavigate } from "react-router-dom";
 import { api, API_BASE } from "../utils/api";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import Pagination from "../components/Pagination";
 import { useTrial } from "../context/TrialContext";
+import TrialPopup from "../components/TrialPopup";
 
 const ProductList = () => {
   const navigate = useNavigate();
-  const { trialExpired, setShowPopup } = useTrial();
+  const { trialExpired } = useTrial();
+  const [showPopup, setShowPopup] = useState(false);
+
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -92,16 +95,15 @@ const fetchProducts = async () => {
   };
 
   const handleEdit = (product) => {
-    navigate("/i-beauty/add-product", { state: { product } });
+    navigate("/i-beauty/add-product", { state: { product, mode: "edit" } });
+  };
+
+  const handleView = (product) => {
+    navigate("/i-beauty/add-product", { state: { product, mode: "view" } });
   };
 
   // OPEN DELETE SINGLE
 const openDeletePopup = (productId) => {
-  if (trialExpired) {
-    setShowPopup(true);
-    return;
-  }
-
   setIsBulkDelete(false);
   setSelectedProductId(productId);
   setShowDeleteModal(true);
@@ -110,11 +112,7 @@ const openDeletePopup = (productId) => {
 
   // CONFIRM DELETE (single + bulk)
 const confirmDelete = async () => {
-  if (trialExpired) {
-    setShowPopup(true);
-    setShowDeleteModal(false);
-    return;
-  }
+
 
   // BULK DELETE
   if (isBulkDelete) {
@@ -172,10 +170,7 @@ const confirmDelete = async () => {
 
 
 const downloadTemplate = async () => {
-  if (trialExpired) {
-    setShowPopup(true);
-    return;
-  }
+
 
   try {
     //  Fetch DB values
@@ -254,10 +249,7 @@ const downloadTemplate = async () => {
 
 
 const uploadExcel = async (e) => {
-  if (trialExpired) {
-    setShowPopup(true);
-    return;
-  }
+
 
   const file = e.target.files[0];
   if (!file) return;
@@ -314,10 +306,7 @@ const uploadExcel = async (e) => {
 
   // Export Excel
   const exportToExcel = () => {
-  if (trialExpired) {
-    setShowPopup(true);
-    return;
-  }
+
     const excelData = products.map((p, index) => ({
       "S.No": index + 1,
       SKU: p.sku,
@@ -389,10 +378,6 @@ const uploadExcel = async (e) => {
  
 const deleteSelected = () => {
 
-  if (trialExpired) {
-    setShowPopup(true);
-    return;
-  }
 
   // Only runs if trial is active
   if (selectedIds.length === 0) {
@@ -412,12 +397,18 @@ const deleteSelected = () => {
   return (
     <div className="p-6 max-w-[1400px] w-full bg-white rounded-lg mx-auto">
 
-      {/* WARNING MESSAGE */}
-      {warning && (
-        <div className="mb-4 p-3 bg-yellow-100 text-yellow-800 border border-yellow-300 rounded">
-          {warning}
-        </div>
-      )}
+    {/* Trial popup – mounted once */}
+    <TrialPopup
+      show={showPopup}
+      onClose={() => setShowPopup(false)}
+    />
+    {/* Warning message */}
+    {warning && (
+      <div className="mb-4 text-red-600 font-semibold text-center">
+        {warning}
+      </div>
+    )}
+
 
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
@@ -435,7 +426,7 @@ const deleteSelected = () => {
 
               <>
                 <button
-                  onClick={handleUploadClick}
+                  onClick={ () => trialGuard(handleUploadClick)}
                   className="border px-4 py-2 rounded-md hover:bg-gray-100"
                 >
                   Upload Excel
@@ -586,6 +577,12 @@ const deleteSelected = () => {
                   </td>
 
                   <td className="p-3 text-center flex justify-center gap-2">
+                    <button 
+                      className="text-gray-500 hover:text-gray-700"
+                      onClick={() => trialGuard(() => handleView(p))}
+                    >
+                      <FiEye />
+                    </button>
                     <button
                       className="text-[#00bcd4] hover:text-[#008b9c]"
                       onClick={() => trialGuard(() => handleEdit(p))}
@@ -594,7 +591,7 @@ const deleteSelected = () => {
                     </button>
                     <button
                       className="text-red-500 hover:text-red-700"
-                      onClick={() => openDeletePopup(p.id)} // NO trialGuard wrapper
+                      onClick={() => trialGuard(() => openDeletePopup(p.id))} 
                     >
                       <FiTrash2 size={18} />
                     </button>

@@ -10,7 +10,7 @@ import { UserProvider } from "./context/UserContext.jsx";
 import { TrialProvider } from "./context/TrialContext";
 
 createRoot(document.getElementById("root")).render(
-  <StrictMode>
+
     <BrowserRouter>
       <UserProvider>
         <TrialProvider>
@@ -18,5 +18,5 @@ createRoot(document.getElementById("root")).render(
         </TrialProvider>
       </UserProvider>
     </BrowserRouter>
-  </StrictMode>
+ 
 );

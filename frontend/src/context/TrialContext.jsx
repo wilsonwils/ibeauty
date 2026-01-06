@@ -1,21 +1,19 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { API_BASE } from "../utils/api";
-import { useUser } from "./UserContext"; 
+import { useUser } from "./UserContext";
 
 const TrialContext = createContext();
 export const useTrial = () => useContext(TrialContext);
 
 export const TrialProvider = ({ children }) => {
-  const { user, token } = useUser(); 
+  const { user, token } = useUser();
 
   const [trialExpired, setTrialExpired] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [showPopup, setShowPopup] = useState(false);
 
   const fetchTrialStatus = async () => {
     if (!user || !token) {
       setTrialExpired(false);
-      setShowPopup(false);
       setLoading(false);
       return;
     }
@@ -33,17 +31,14 @@ export const TrialProvider = ({ children }) => {
         data.trial_expired === true;
 
       setTrialExpired(expired);
-      setShowPopup(expired);
     } catch (err) {
       console.error("Trial check failed", err);
       setTrialExpired(false);
-      setShowPopup(false);
     } finally {
       setLoading(false);
     }
   };
 
-  
   useEffect(() => {
     fetchTrialStatus();
   }, [user?.id, token]);
@@ -53,9 +48,6 @@ export const TrialProvider = ({ children }) => {
       value={{
         trialExpired,
         loading,
-        showPopup,
-        setShowPopup,
-        refreshTrialStatus: fetchTrialStatus,
       }}
     >
       {children}

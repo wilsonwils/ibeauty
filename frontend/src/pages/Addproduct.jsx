@@ -4,7 +4,7 @@ import { api, API_BASE } from "../utils/api";
 
 
 /* ================= MULTI SELECT DROPDOWN ================= */
-const MultiSelectDropdown = ({ options, selectedOptions, setSelectedOptions, label }) => {
+const MultiSelectDropdown = ({ options, selectedOptions, setSelectedOptions, label, disabled }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -19,6 +19,7 @@ const MultiSelectDropdown = ({ options, selectedOptions, setSelectedOptions, lab
   }, []);
 
   const toggleOption = (option) => {
+    if (disabled) return;
     setSelectedOptions(
       selectedOptions.includes(option)
         ? selectedOptions.filter((o) => o !== option)
@@ -31,7 +32,7 @@ const MultiSelectDropdown = ({ options, selectedOptions, setSelectedOptions, lab
       <label className="block text-sm font-medium mb-1">{label}</label>
       <div
         className="border border-gray-300 rounded px-3 py-2 min-h-[42px] cursor-pointer flex justify-between items-center"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => !disabled && setIsOpen(!isOpen)}
       >
         <span className="text-sm truncate">
           {selectedOptions.length ? selectedOptions.join(", ") : "Select"}
@@ -73,6 +74,9 @@ const AddProduct = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const product = location.state?.product;
+  
+  const mode = location.state?.mode || "edit";
+  const isViewMode = mode === "view";
 
   const token = localStorage.getItem("AUTH_TOKEN");
 
@@ -90,6 +94,7 @@ const AddProduct = () => {
 
   const [image, setImage] = useState(null);
   const [preview, setPreview] = useState(null);
+  const [imageUrlInput, setImageUrlInput] = useState("");
 
   const [productTypes, setProductTypes] = useState([]);
   const [skinTypes, setSkinTypes] = useState([]);
@@ -115,7 +120,14 @@ const AddProduct = () => {
       setMajorUsp(product.major_usp || "");
       setDescription(product.description || "");
       setConcerns(product.concerns || "");
-      setPreview(product.image_url ? `${API_BASE}${product.image_url}` : null);
+      if (product.image_url?.startsWith("http")) {
+        setImageUrlInput(product.image_url);
+        setPreview(product.image_url);
+    } else {
+        const fullUrl = `${API_BASE}${product.image_url}`;
+        setImageUrlInput(fullUrl);
+        setPreview(fullUrl);
+    }
 
       setSelectedProductTypes(product.product_types || []);
       setSelectedSkinTypes(product.skin_types || []);
@@ -147,24 +159,50 @@ const AddProduct = () => {
     fetchOptions();
   }, [token]);
 
-  const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    setImage(file);
-    if (file) setPreview(URL.createObjectURL(file));
-  };
+const handleImageChange = (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
 
-  const uploadImage = async () => {
-    if (!image) return product?.image_url || null;
+  setImage(file);
+  setImageUrlInput("");
+  setPreview(URL.createObjectURL(file)); 
+};
+
+
+const handleImageUrlChange = (e) => {
+  const url = e.target.value;
+  setImageUrlInput(url);
+  setImage(null);    
+  setPreview(null); 
+};
+
+
+
+const uploadImage = async () => {
+  // Paste URL
+  if (imageUrlInput?.trim()) {
+    return imageUrlInput.trim();
+  }
+
+  // Upload file
+  if (image) {
     const formData = new FormData();
     formData.append("image", image);
+
     const res = await fetch(`${API_BASE}/upload_image`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
       body: formData,
     });
+
     const data = await res.json();
     return data.imageUrl;
-  };
+  }
+
+  return product?.image_url || null;
+};
+
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -230,19 +268,19 @@ const AddProduct = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label className="block text-sm font-medium mb-1">SKU</label>
-            <input className="border p-2 rounded w-full" value={sku} onChange={(e) => setSku(e.target.value)} />
+            <input className="border p-2 rounded w-full" value={sku} onChange={(e) => setSku(e.target.value)} readOnly={isViewMode} />
           </div>
           <div>
             <label className="block font-medium text-sm mb-1">Variant ID</label>
-            <input className="border p-2 rounded w-full" value={variantId} onChange={(e) => setVariantId(e.target.value)} />
+            <input className="border p-2 rounded w-full" value={variantId} onChange={(e) => setVariantId(e.target.value)} readOnly={isViewMode} />
           </div>
           <div>
             <label className="block font-medium text-sm mb-1">Brand</label>
-            <input className="border p-2 rounded w-full" value={brand} onChange={(e) => setBrand(e.target.value)} />
+            <input className="border p-2 rounded w-full" value={brand} onChange={(e) => setBrand(e.target.value)} readOnly={isViewMode} />
           </div>
           <div>
             <label className="block font-medium text-sm mb-1">Product Name</label>
-            <input className="border p-2 rounded w-full" value={productName} onChange={(e) => setProductName(e.target.value)} />
+            <input className="border p-2 rounded w-full" value={productName} onChange={(e) => setProductName(e.target.value)} readOnly={isViewMode} />
           </div>
         </div>
 
@@ -250,11 +288,11 @@ const AddProduct = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block font-medium text-sm mb-1">Amount</label>
-            <input className="border p-2 rounded w-full" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            <input className="border p-2 rounded w-full" value={amount} onChange={(e) => setAmount(e.target.value)} readOnly={isViewMode} />
           </div>
           <div>
             <label className="block font-medium text-sm mb-1">Stock</label>
-            <input className="border p-2 rounded w-full" value={stock} onChange={(e) => setStock(e.target.value)} />
+            <input className="border p-2 rounded w-full" value={stock} onChange={(e) => setStock(e.target.value)} readOnly={isViewMode} />
           </div>
         </div>
 
@@ -262,22 +300,54 @@ const AddProduct = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block font-medium text-sm mb-1">Major USP</label>
-            <textarea className="border p-2 rounded w-full min-h-[120px]" value={majorUsp} onChange={(e) => setMajorUsp(e.target.value)} />
+            <textarea className="border p-2 rounded w-full min-h-[120px]" value={majorUsp} onChange={(e) => setMajorUsp(e.target.value)} readOnly={isViewMode} />
           </div>
           <div>
             <label className="block font-medium text-sm mb-1">Description</label>
-            <textarea className="border p-2 rounded w-full min-h-[120px]" value={description} onChange={(e) => setDescription(e.target.value)} />
+            <textarea className="border p-2 rounded w-full min-h-[120px]" value={description} onChange={(e) => setDescription(e.target.value)} readOnly={isViewMode} />
           </div>
         </div>
 
         {/* ROW 4 */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label className="block font-medium text-sm mb-1">Upload Image</label>
-            <div className="border border-dashed rounded p-3">
-              <input type="file" onChange={handleImageChange} />
-              {preview && <img src={preview} alt="preview" className="mt-2 h-24 rounded object-cover" />}
+            <label className="block font-medium text-sm mb-1">
+              Upload Image or Paste URL
+            </label>
+
+            <div className="border border-dashed rounded p-3 space-y-2">
+
+              {/* File Upload */}
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+                disabled={isViewMode}
+              />
+
+              <div className="text-center text-xs text-gray-400">OR</div>
+
+              {/* Image URL */}
+              <input
+                type="text"
+                placeholder="Paste image URL"
+                value={imageUrlInput}
+                onChange={handleImageUrlChange}
+                className="w-full border rounded px-2 py-1 text-sm"
+                readOnly={isViewMode}
+              />
+
+              {/* Preview */}
+              {preview && (
+                <img
+                  src={preview}
+                  alt="preview"
+                  className="mt-2 h-24 rounded object-cover"
+                  onError={() => setPreview(null)}
+                />
+              )}
             </div>
+
           </div>
 
           <MultiSelectDropdown
@@ -285,12 +355,14 @@ const AddProduct = () => {
             options={productTypes}
             selectedOptions={selectedProductTypes}
             setSelectedOptions={setSelectedProductTypes}
+            disabled={isViewMode}
           />
           <MultiSelectDropdown
             label="Skin Types"
             options={skinTypes}
             selectedOptions={selectedSkinTypes}
             setSelectedOptions={setSelectedSkinTypes}
+            disabled={isViewMode}
           />
         </div>
 
@@ -301,10 +373,11 @@ const AddProduct = () => {
             options={genderOptions}
             selectedOptions={selectedGender}
             setSelectedOptions={setSelectedGender}
+            disabled={isViewMode}
           />
           <div>
             <label className="block font-medium text-sm mb-1">Age</label>
-            <input className="border p-2 rounded w-full" value={selectedAge} onChange={(e) => setSelectedAge(e.target.value)} />
+            <input className="border p-2 rounded w-full" value={selectedAge} onChange={(e) => setSelectedAge(e.target.value)} readOnly={isViewMode} />
           </div>
         </div>
 
@@ -312,7 +385,7 @@ const AddProduct = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block font-medium text-sm mb-1">Concerns</label>
-            <textarea className="border p-4 rounded w-full min-h-[120px]" value={concerns} onChange={(e) => setConcerns(e.target.value)} />
+            <textarea className="border p-4 rounded w-full min-h-[120px]" value={concerns} onChange={(e) => setConcerns(e.target.value)} readOnly={isViewMode} />
           </div>
 
           <MultiSelectDropdown
@@ -320,13 +393,24 @@ const AddProduct = () => {
             options={timeOptions}
             selectedOptions={selectedTime}
             setSelectedOptions={setSelectedTime}
+            disabled={isViewMode}
           />
         </div>
 
         <div className="flex justify-end">
-          <button className="bg-[#00bcd4] text-white px-6 py-2 rounded">
-            {product ? "Update Product" : "Add Product"}
-          </button>
+          {isViewMode ? (
+            <button
+              type="button"
+              className="bg-[#00bcd4] text-white px-6 py-2 rounded"
+              onClick={() => window.print()}
+            >
+              Print
+            </button>
+          ) : (
+            <button className="bg-[#00bcd4] text-white px-6 py-2 rounded">
+              {product ? "Update Product" : "Add Product"}
+            </button>
+          )}
         </div>
 
       </form>

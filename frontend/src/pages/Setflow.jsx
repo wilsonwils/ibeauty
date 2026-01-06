@@ -12,6 +12,7 @@ import SuggestProduct from "./SuggestProduct";
 import { permissionService } from "../services/permissionService";
 import { label } from "three/tsl";
 import { useTrial } from "../context/TrialContext";
+import TrialPopup from "../components/TrialPopup";
 
 
 const Setflow = () => {
@@ -459,21 +460,30 @@ const contents = permittedFlow.map((s, i) =>
   React.cloneElement(s.render, { key: i })
 );
 
-const { trialExpired, setShowPopup } = useTrial();
+const { trialExpired } = useTrial();
+const [showPopup, setShowPopup] = useState(false);
+
 
 const guardAction = (action) => {
   if (trialExpired) {
-    setShowPopup(true);   // show popup
-    return;               // STOP action
+    setShowPopup(true);
+    return;
   }
-  action();               // run original logic
+  action();
 };
+
 
 
   // ==================================================
   // RENDER
   // ==================================================
 return (
+  <>
+      {/* Trial popup */}
+    <TrialPopup
+      show={showPopup}
+      onClose={() => setShowPopup(false)}
+    />
     <div className="p-6">
   <div className="flex mb-6">
     {steps.map((step, i) => (
@@ -539,6 +549,7 @@ return (
 
       </div>
     </div>
+    </>
   );
 };
 
