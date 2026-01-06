@@ -522,7 +522,7 @@ def get_my_modules():
         """, (user_id,))
         row = cur.fetchone()
 
-        plan_id = row[0] if row else 0
+        plan_id = row[0] if row else None
         organization_id = row[1] if row else None
 
         # -------- CHECK TRIAL EXPIRY --------
