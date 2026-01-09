@@ -61,9 +61,21 @@ const Segmentation = ({ data, setData, setSaveFunction }) => {
   if (!flowId || !token) return false;
 
   const skip = options?.skip === true;
-  const dataToSave = skip
-    ? {}
-    : _stepData || { segmentation, answers, required };
+  if (!skip) {
+    // ✅ VALIDATION: Yes but no options selected
+    const invalidFields = Object.keys(segmentationFields).filter(
+      (field) =>
+        segmentation[field] === true &&
+        (!answers[field] || answers[field].length === 0)
+    );
+
+    if (invalidFields.length > 0) {
+      showError(
+        `Please select at least one option for: ${invalidFields.join(", ")}`
+      );
+      return false;
+    }
+  }
 
   try {
     const res = await fetch(`${API_BASE}/save_segmentation`, {
@@ -97,6 +109,7 @@ const Segmentation = ({ data, setData, setSaveFunction }) => {
     return false;
   }
 };
+
 
 
     setSaveFunction(() => saveSegmentation);
