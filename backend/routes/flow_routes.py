@@ -406,7 +406,6 @@ def save_contact_page():
 
 
 
-
 @flow_bp.post("/save_segmentation")
 def save_segmentation():
     auth = request.headers.get("Authorization")
@@ -423,75 +422,74 @@ def save_segmentation():
 
     data = request.get_json() or {}
     flow_id = data.get("flow_id")
-    skip = data.get("skip") is True
+    fields = data.get("segmentation_fields", [])
+    skip = data.get("skip", False)
 
     if not flow_id:
-        return jsonify({"error": "flow_id is required"}), 400
-
-    segmentation_fields = data.get("segmentation_fields")
-
-    if skip:
-        segmentation_fields = []
-    else:
-        # Ensure valid list when not skipped
-        if segmentation_fields is None:
-            segmentation_fields = []
-
-        if not isinstance(segmentation_fields, list):
-            return jsonify({"error": "Invalid segmentation data"}), 400
+        return jsonify({"error": "flow_id required"}), 400
 
     conn = get_connection()
     cur = conn.cursor()
 
     try:
-        # Validate flow belongs to org
-        cur.execute("""
-            SELECT id FROM flows
-            WHERE id=%s AND organization_id=%s
-        """, (flow_id, organization_id))
+        segmentation_ids = []
 
-        if not cur.fetchone():
-            return jsonify({"error": "Invalid flow or unauthorized"}), 403
+        for field in fields:
+            label = field.get("label")
+            key = field.get("key")           
+            required = field.get("required", False)
+            options = field.get("options", [])
 
-        # Check existing segmentation
-        cur.execute("""
-            SELECT id FROM segmentation_fields
-            WHERE flow_id=%s AND user_id=%s
-        """, (flow_id, user_id))
+            if skip:
+                key = None
+                required = False
+                options = []
 
-        existing = cur.fetchone()
-        segmentation_json = json.dumps(segmentation_fields)
-
-        if existing:
-            segmentation_id = existing[0]
             cur.execute("""
-                UPDATE segmentation_fields
-                SET segmentation_details=%s
-                WHERE id=%s
-            """, (segmentation_json, segmentation_id))
-        else:
-            cur.execute("""
-                INSERT INTO segmentation_fields
-                (flow_id, user_id, organization_id, segmentation_details)
-                VALUES (%s, %s, %s, %s)
-                RETURNING id
-            """, (
-                flow_id,
-                user_id,
-                organization_id,
-                segmentation_json
-            ))
-            segmentation_id = cur.fetchone()[0]
+                SELECT id FROM segmentation_fields
+                WHERE flow_id=%s AND user_id=%s AND label=%s
+            """, (flow_id, user_id, label))
+
+            existing = cur.fetchone()
+
+            if existing:
+                cur.execute("""
+                    UPDATE segmentation_fields
+                    SET key=%s,
+                        options=%s,
+                        required=%s
+                    WHERE id=%s
+                """, (
+                    key,
+                    json.dumps(options),
+                    required,
+                    existing[0]
+                ))
+                segmentation_ids.append(existing[0])
+            else:
+                cur.execute("""
+                    INSERT INTO segmentation_fields
+                    (flow_id, organization_id, user_id, label, key, options, required)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id
+                """, (
+                    flow_id,
+                    organization_id,
+                    user_id,
+                    label,
+                    key,
+                    json.dumps(options),
+                    required
+                ))
+                segmentation_ids.append(cur.fetchone()[0])
 
         conn.commit()
 
         return jsonify({
             "message": "Segmentation saved successfully",
-            "id": segmentation_id,
-            "flow_id": flow_id,
-            "organization_id": organization_id,
+            "segmentation_ids": segmentation_ids,
             "skip": skip
-        }), 201
+        }), 200
 
     except Exception as e:
         conn.rollback()
@@ -500,6 +498,7 @@ def save_segmentation():
     finally:
         cur.close()
         conn.close()
+
 
 
 

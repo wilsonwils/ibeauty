@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useUser } from "../context/UserContext";
 
 const Header = () => {
-  const { user, loading } = useUser(); // ⬅️ Get User from Context
+  const { user, loading } = useUser(); 
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
 
@@ -57,7 +57,7 @@ const Header = () => {
         >
           <div className="text-right">
             <p className="text-sm font-semibold">
-              Hi {user?.fullName || "User"}
+               {user?.fullName || "Admin"}
             </p>
             <p className="text-xs text-gray-500">{today}</p>
           </div>

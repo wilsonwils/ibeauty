@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { FiEdit, FiTrash2, FiLink2, FiPlus, FiFilter, FiEye } from "react-icons/fi";
+import { FiEdit, FiTrash2, FiPlus, FiFilter, FiEye } from "react-icons/fi";
 import { useNavigate } from "react-router-dom";
 import { api, API_BASE } from "../utils/api";
 import * as XLSX from "xlsx";
@@ -15,6 +15,11 @@ const ProductList = () => {
 
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [primaryProductId, setPrimaryProductId] = useState(null);
+  const [showPrimaryModal, setShowPrimaryModal] = useState(false);
+  const [pendingPrimaryId, setPendingPrimaryId] = useState(null);
+
+
 
   // Checkbox
   const [selectedIds, setSelectedIds] = useState([]);
@@ -40,7 +45,52 @@ const ProductList = () => {
 
   const fileInputRef = useRef(null);
 
-  
+const confirmPrimaryChange = async () => {
+  if (!pendingPrimaryId) return;
+
+  await setPrimaryProduct(pendingPrimaryId);
+
+  setPendingPrimaryId(null);
+  setShowPrimaryModal(false);
+};
+const cancelPrimaryChange = () => {
+  setPendingPrimaryId(null);
+  setShowPrimaryModal(false);
+};
+
+
+
+const getPrimaryPopupMessage = () => {
+  if (!primaryProductId) {
+    return "Are you sure you want to make this the primary product?";
+  }
+
+  if (primaryProductId === pendingPrimaryId) {
+    return "Are you sure you want to remove the primary product?";
+  }
+
+  return "Are you sure you want to change the primary product?";
+};
+
+const setPrimaryProduct = async (productId) => {
+  try {
+    const res = await api("/set_primary", {
+      method: "POST",
+      body: JSON.stringify({ product_id: productId }),
+    });
+
+    if (res.ok) {
+      alert(res.message || "Primary product updated");
+      fetchProducts(); // reload product list
+    } else {
+      alert(res.error || "Failed to set primary product");
+    }
+  } catch (err) {
+    console.error("Failed to set primary product", err);
+    alert("primary product set failed.");
+  }
+};
+
 
 const trialGuard = (action) => {
   if (trialExpired) {
@@ -193,11 +243,13 @@ const downloadTemplate = async () => {
         stock: "",
         major_usp: "",
         description: "",
+        image_url: "",
         concerns: "",
         product_types: `(${productTypes.join(",")})`,
         skin_types: `(${skinTypes.join(",")})`,
         gender: "(Male,Female,Transgender)",
         age: "",
+        checkout_url: "",
         time_session: "(AM,PM)",
         image_url: "",
       },
@@ -518,11 +570,11 @@ const deleteSelected = () => {
               {/* <th className="p-3 text-left">GST</th> */}
               <th className="p-3 text-left">Stock</th>
               <th className="p-3 text-left">Status</th>
-              <th className="p-3 text-center">Embedded URL</th>
+              <th className="p-3 text-center">Primary Product</th>
               <th className="p-3 text-center">Action</th>
             </tr>
           </thead>
-
+ 
           <tbody>
             {currentProducts.length === 0 ? (
               <tr>
@@ -570,11 +622,44 @@ const deleteSelected = () => {
                     {p.is_active ? "Active" : "Inactive"}
                   </td>
 
-                  <td className="p-3 text-center">
-                    <button className="text-[#00bcd4]">
-                      <FiLink2 size={18} />
-                    </button>
-                  </td>
+               <td className="p-3 text-center">
+                <input
+                  type="checkbox"
+                  className="h-5 w-5 text-[#00bcd4]"
+                  checked={p.is_primary}
+                  onChange={() => {
+                    if (p.is_primary) return;
+
+                    setPendingPrimaryId(p.id);
+                    setShowPrimaryModal(true);
+                  }}
+                />
+
+
+              </td>
+                  {showPrimaryModal && (
+                    <div className="fixed top-10 left-1/2 -translate-x-1/2 z-50">
+                      <div className="bg-white border shadow-md rounded-md px-6 py-4 flex items-center gap-4">
+                        <span className="text-sm font-medium text-gray-800">
+                          {getPrimaryPopupMessage()}
+                        </span>
+
+                        <button
+                          className="px-3 py-1 text-sm bg-[#00bcd4] text-white rounded hover:bg-[#008b9c]"
+                          onClick={confirmPrimaryChange}
+                        >
+                          Yes
+                        </button>
+
+                        <button
+                          className="px-3 py-1 text-sm bg-gray-200 rounded hover:bg-gray-300"
+                          onClick={cancelPrimaryChange}
+                        >
+                          No
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   <td className="p-3 text-center flex justify-center gap-2">
                     <button 

@@ -1,73 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api, API_BASE } from "../utils/api";
-
-
-/* ================= MULTI SELECT DROPDOWN ================= */
-const MultiSelectDropdown = ({ options, selectedOptions, setSelectedOptions, label, disabled }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef(null);
-
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  const toggleOption = (option) => {
-    if (disabled) return;
-    setSelectedOptions(
-      selectedOptions.includes(option)
-        ? selectedOptions.filter((o) => o !== option)
-        : [...selectedOptions, option]
-    );
-  };
-
-  return (
-    <div className="relative w-full" ref={dropdownRef}>
-      <label className="block text-sm font-medium mb-1">{label}</label>
-      <div
-        className="border border-gray-300 rounded px-3 py-2 min-h-[42px] cursor-pointer flex justify-between items-center"
-        onClick={() => !disabled && setIsOpen(!isOpen)}
-      >
-        <span className="text-sm truncate">
-          {selectedOptions.length ? selectedOptions.join(", ") : "Select"}
-        </span>
-        <svg
-          className={`w-4 h-4 transition ${isOpen ? "rotate-180" : ""}`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </div>
-
-      {isOpen && (
-        <div className="absolute z-20 w-full bg-white border rounded mt-1 max-h-56 overflow-auto shadow">
-          {options.map((option) => (
-            <label
-              key={option}
-              className="flex items-center px-3 py-2 text-sm hover:bg-gray-100 cursor-pointer"
-            >
-              <input
-                type="checkbox"
-                className="mr-2"
-                checked={selectedOptions.includes(option)}
-                onChange={() => toggleOption(option)}
-              />
-              {option}
-            </label>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
+import MultiSelectDropdown from "../components/MultiSelectDropdown";
 
 /* ================= ADD PRODUCT ================= */
 const AddProduct = () => {
@@ -90,19 +24,24 @@ const AddProduct = () => {
 
   const [majorUsp, setMajorUsp] = useState("");
   const [description, setDescription] = useState("");
-  const [concerns, setConcerns] = useState("");
+  
 
   const [image, setImage] = useState(null);
   const [preview, setPreview] = useState(null);
   const [imageUrlInput, setImageUrlInput] = useState("");
+  const [checkoutUrl, setCheckoutUrl] = useState("");
 
   const [productTypes, setProductTypes] = useState([]);
   const [skinTypes, setSkinTypes] = useState([]);
+  const [conditions, setConditions] = useState([]);
+
+  const [ageFrom, setAgeFrom] = useState("");
+  const [ageTo, setAgeTo] = useState("");
 
   const [selectedProductTypes, setSelectedProductTypes] = useState([]);
   const [selectedSkinTypes, setSelectedSkinTypes] = useState([]);
+  const [selectedConditions, setSelectedConditions] = useState([]);
   const [selectedGender, setSelectedGender] = useState([]);
-  const [selectedAge, setSelectedAge] = useState("");
   const [selectedTime, setSelectedTime] = useState([]);
 
   const genderOptions = ["Male", "Female", "Transgender"];
@@ -119,7 +58,6 @@ const AddProduct = () => {
       setStock(product.stock || "");
       setMajorUsp(product.major_usp || "");
       setDescription(product.description || "");
-      setConcerns(product.concerns || "");
       if (product.image_url?.startsWith("http")) {
         setImageUrlInput(product.image_url);
         setPreview(product.image_url);
@@ -128,11 +66,14 @@ const AddProduct = () => {
         setImageUrlInput(fullUrl);
         setPreview(fullUrl);
     }
-
+ 
       setSelectedProductTypes(product.product_types || []);
       setSelectedSkinTypes(product.skin_types || []);
       setSelectedGender(product.gender || []);
-      setSelectedAge(product.age || "");
+      setSelectedConditions(product.skin_conditions || []);
+      setAgeFrom(product.age_from || "");
+      setAgeTo(product.age_to || "");
+      setCheckoutUrl(product.checkout_url || "");
       setSelectedTime(product.time_session || []);
     }
   }, [product]);
@@ -148,9 +89,13 @@ const AddProduct = () => {
         const stRes = await fetch(`${API_BASE}/skin_types`, {
           headers: { Authorization: `Bearer ${token}` },
         });
+        const cRes = await fetch(`${API_BASE}/skin-conditions`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
 
         if (ptRes.ok) setProductTypes(await ptRes.json());
         if (stRes.ok) setSkinTypes(await stRes.json());
+        if (cRes.ok) setConditions(await cRes.json());
       } catch (err) {
         console.error(err);
         alert("Failed to fetch dropdown options");
@@ -175,6 +120,11 @@ const handleImageUrlChange = (e) => {
   setImage(null);    
   setPreview(null); 
 };
+
+const handleCheckoutUrlChange = (e) => {
+  const url = e.target.value;
+  setCheckoutUrl(url);
+}
 
 
 
@@ -219,12 +169,14 @@ const uploadImage = async () => {
       stock,
       major_usp: majorUsp,
       description,
-      concerns,
+      conditions: selectedConditions,
       image_url: imageUrl,
       product_types: selectedProductTypes,
       skin_types: selectedSkinTypes,
       gender: selectedGender,
-      age: selectedAge,
+      age_from: ageFrom,
+      age_to: ageTo,
+      checkout_url: checkoutUrl, 
       time_session: selectedTime,
       user_id: localStorage.getItem("userId"),
     };
@@ -288,13 +240,37 @@ const uploadImage = async () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block font-medium text-sm mb-1">Amount</label>
-            <input className="border p-2 rounded w-full" value={amount} onChange={(e) => setAmount(e.target.value)} readOnly={isViewMode} />
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              className="border p-2 rounded w-full"
+              value={amount}
+              readOnly={isViewMode}
+              onChange={(e) => {
+                const value = e.target.value.replace(/\D/g, "");
+                setAmount(value);
+              }}
+            />
           </div>
+
           <div>
             <label className="block font-medium text-sm mb-1">Stock</label>
-            <input className="border p-2 rounded w-full" value={stock} onChange={(e) => setStock(e.target.value)} readOnly={isViewMode} />
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              className="border p-2 rounded w-full"
+              value={stock}
+              readOnly={isViewMode}
+              onChange={(e) => {
+                const value = e.target.value.replace(/\D/g, "");
+                setStock(value);
+              }}
+            />
           </div>
         </div>
+
 
         {/* ROW 3 */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -375,18 +351,83 @@ const uploadImage = async () => {
             setSelectedOptions={setSelectedGender}
             disabled={isViewMode}
           />
-          <div>
-            <label className="block font-medium text-sm mb-1">Age</label>
-            <input className="border p-2 rounded w-full" value={selectedAge} onChange={(e) => setSelectedAge(e.target.value)} readOnly={isViewMode} />
-          </div>
+
+<div>
+  <label className="block font-medium text-sm mb-1">Age</label>
+  <div className="flex gap-2">
+    {/* From Input */}
+    <div className="flex flex-col w-1/2">
+      <label className="text-xs font-medium mb-1">From</label>
+      <input
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        className="border p-2 rounded w-full"
+        value={ageFrom}
+        readOnly={isViewMode}
+        onChange={(e) => {
+          const value = e.target.value.replace(/\D/g, "");
+          setAgeFrom(value);
+        }}
+        onBlur={() => {
+          if (ageTo && Number(ageFrom) > Number(ageTo)) {
+            alert("Age From cannot be greater than Age To");
+            setAgeFrom("");
+          }
+        }}
+      />
+    </div>
+
+    {/* To Input */}
+    <div className="flex flex-col w-1/2">
+      <label className="text-xs font-medium mb-1">To</label>
+      <input
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        className="border p-2 rounded w-full"
+        value={ageTo}
+        readOnly={isViewMode}
+        onChange={(e) => {
+          const value = e.target.value.replace(/\D/g, "");
+          setAgeTo(value);
+        }}
+        onBlur={() => {
+          if (ageFrom && Number(ageTo) < Number(ageFrom)) {
+            alert("Age To cannot be less than Age From");
+            setAgeTo("");
+          }
+        }}
+      />
+    </div>
+  </div>
+</div>
+
+
+         <div>
+          <label className="block font-medium text-sm mb-1">Checkout Url</label>
+              <input
+                type="text"
+                placeholder="checkout url"
+                value={checkoutUrl}
+                onChange={handleCheckoutUrlChange}
+                className="w-full border rounded px-2 py-1 text-sm"
+                readOnly={isViewMode}
+              />
+         </div>
+
         </div>
 
         {/* ROW 6 */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block font-medium text-sm mb-1">Concerns</label>
-            <textarea className="border p-4 rounded w-full min-h-[120px]" value={concerns} onChange={(e) => setConcerns(e.target.value)} readOnly={isViewMode} />
-          </div>
+          <MultiSelectDropdown 
+            label="Conditions"
+            options={conditions}
+            selectedOptions={selectedConditions}
+            setSelectedOptions={setSelectedConditions}
+            disabled={isViewMode}
+          />
+
 
           <MultiSelectDropdown
             label="Time / Session"

@@ -1,14 +1,41 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { API_BASE } from "../utils/api";
-
-// Import CKEditor
-import { CKEditor } from "@ckeditor/ckeditor5-react";
-import ClassicEditor from "@ckeditor/ckeditor5-build-classic";
+import Quill from "quill";
+import "quill/dist/quill.snow.css"; // Quill styles
 
 const CapturePage = ({ data, setData, setSaveFunction }) => {
   const [description, setDescription] = useState(data.description || "");
   const [errorMsg, setErrorMsg] = useState("");
+  const editorRef = useRef(null);
+  const quillInstance = useRef(null);
 
+  // Initialize Quill
+  useEffect(() => {
+    if (!editorRef.current) return;
+
+    quillInstance.current = new Quill(editorRef.current, {
+      theme: "snow",
+      placeholder: "Enter description here",
+      modules: {
+        toolbar: [
+          [{ header: [1, 2, 3, false] }],
+          ["bold", "italic", "underline", "strike"],
+          [{ list: "ordered" }, { list: "bullet" }],
+          ["link", "clean"],
+        ],
+      },
+    });
+
+    // Set initial content
+    quillInstance.current.root.innerHTML = description;
+
+    // Listen to text changes
+    quillInstance.current.on("text-change", () => {
+      setDescription(quillInstance.current.root.innerHTML);
+    });
+  }, []);
+
+  // Update parent data whenever description changes
   useEffect(() => {
     setData((prev) => ({ ...prev, description }));
   }, [description, setData]);
@@ -18,6 +45,7 @@ const CapturePage = ({ data, setData, setSaveFunction }) => {
     setTimeout(() => setErrorMsg(""), 3000);
   };
 
+  // Save function to be used externally
   useEffect(() => {
     const saveCapturePage = async (flowId, _stepData, options = {}) => {
       const token = localStorage.getItem("AUTH_TOKEN");
@@ -67,23 +95,7 @@ const CapturePage = ({ data, setData, setSaveFunction }) => {
 
       <div>
         <label className="font-semibold">Disclaimer</label>
-        <CKEditor
-          editor={ClassicEditor}
-          data={description}
-          onChange={(event, editor) => {
-            const data = editor.getData();
-            setDescription(data);
-          }}
-          config={{
-            placeholder: "Enter description here",
-            toolbar: [
-              "heading", "|",
-              "bold", "italic", "underline", "strikethrough", "|",
-              "link", "bulletedList", "numberedList", "|",
-              "undo", "redo"
-            ]
-          }}
-        />
+        <div ref={editorRef} style={{ height: 100 }} />
       </div>
     </div>
   );

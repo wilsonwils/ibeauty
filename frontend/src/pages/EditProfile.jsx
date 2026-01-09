@@ -1,11 +1,9 @@
 import React, { useEffect, useState, useRef } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { api } from "../utils/api";
 
 const EditProfile = () => {
   const navigate = useNavigate();
-  const location = useLocation();
-  const user = location.state?.user;
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -18,53 +16,40 @@ const EditProfile = () => {
 
   const fileInputRef = useRef(null);
 
-  useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const userId = localStorage.getItem("userId");
-        if (!userId) return;
+useEffect(() => {
+  const fetchUser = async () => {
+    try {
+      const userId = localStorage.getItem("userId");
+      if (!userId) return;
 
-        const res = await api(`/get-profile/${userId}`);
-        const data = await res.json();
+      const res = await api(`/get-profile/${userId}`);
+      const data = await res.json();
 
-        if (res.ok && data.status === "success") {
-          const u = data.user;
-          setFirstName(u.firstName || "");
-          setLastName(u.lastName || "");
-          setEmail(u.email || "");
-          setOrganization(u.organization || "");
-          setPhone(u.phone || "");
-          setWhatsapp(u.whatsapp || ""); 
+      if (res.ok && data.status === "success") {
+        const u = data.user;
+        setFirstName(u.firstName || "");
+        setLastName(u.lastName || "");
+        setEmail(u.email || "");
+        setOrganization(u.organization || "");
+        setPhone(u.phone || "");
+        setWhatsapp(u.whatsapp || ""); 
 
-          if (u.logo) {
-            setLogo(u.logo);
-            setLogoPreview(u.logo);
-          }
-        } else {
-          alert(data.message || "Failed to fetch user data");
+        if (u.logo) {
+          setLogo(u.logo);
+          setLogoPreview(u.logo);
         }
-      } catch (err) {
-        console.error(err);
-        alert("Something went wrong fetching user data");
+      } else {
+        alert(data.message || "Failed to fetch user data");
       }
-    };
-
-    if (user) {
-      setFirstName(user.firstName || "");
-      setLastName(user.lastName || "");
-      setEmail(user.email || "");
-      setOrganization(user.organization || "");
-      setPhone(user.phone || "");
-      setWhatsapp(user.whatsapp || ""); 
-
-      if (user.logo) {
-        setLogo(user.logo);
-        setLogoPreview(user.logo);
-      }
-    } else {
-      fetchUser();
+    } catch (err) {
+      console.error(err);
+      alert("Something went wrong fetching user data");
     }
-  }, [user]);
+  };
+
+  fetchUser();
+}, []); 
+
 
   const handleLogoClick = () => {
     fileInputRef.current.click();

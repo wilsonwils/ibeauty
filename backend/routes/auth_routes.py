@@ -11,11 +11,13 @@ from database import get_connection
 from utils.password_utils import verify_password
 from utils.recaptcha import USE_RECAPTCHA, RECAPTCHA_SECRET
 from services.email_service import send_verification_email
+from services.module_permission_service import get_allowed_modules
+
 
 # ---------------------------------------------
 # JWT CONFIG
 # ---------------------------------------------
-SECRET_KEY = os.getenv("JWT_SECRET", "fallback_dev_secret")   # fallback for local dev
+SECRET_KEY = os.getenv("JWT_SECRET", "fallback_dev_secret")   
 ALGORITHM = "HS256"
 
 def create_token(data: dict):
@@ -144,6 +146,184 @@ def signup():
         cur.close()
         conn.close()
 
+
+# ---------------------------------------------
+# EMAIL VERIFICATION
+# ---------------------------------------------
+@auth_bp.get("/verify/<token>")
+def verify(token):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("SELECT id FROM users WHERE oauth_provider_id=%s", (token,))
+        row = cur.fetchone()
+
+        if not row:
+            return redirect("http://localhost:5173/verify?status=invalid")
+
+        user_id = row[0]
+
+        cur.execute("""
+            UPDATE users
+            SET is_active = TRUE,
+                is_verified = TRUE,
+                oauth_provider_id = NULL
+            WHERE id=%s
+        """, (user_id,))
+        conn.commit()
+
+        return redirect("http://localhost:5173/verify?status=success")
+
+    finally:
+        cur.close()
+        conn.close()
+        
+
+
+# ---------------------------------------------
+# LOGIN
+# ---------------------------------------------
+@auth_bp.post("/login")
+def login():
+    data = request.json or {}
+
+    email = data.get("email")
+    password = data.get("password")
+
+    if not email or not password:
+        return jsonify({"error": "Email and password required"}), 400
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    try:
+        # ===================== ADMIN LOGIN =====================
+        if email == "admin@gmail.com" and password == "admin":
+
+            cur.execute("SELECT id FROM users WHERE email=%s", (email,))
+            admin = cur.fetchone()
+
+            if not admin:
+                cur.execute("""
+                    INSERT INTO users (email, is_admin)
+                    VALUES (%s, TRUE)
+                    RETURNING id
+                """, (email,))
+                admin_id = cur.fetchone()[0]
+                conn.commit()
+            else:
+                admin_id = admin[0]
+
+            token = create_token({
+                "user_id": admin_id,
+                "is_admin": True
+            })
+
+            return jsonify({
+                "message": "Login successful",
+                "token": token,
+                "userId": admin_id,
+                "is_admin": True
+            }), 200
+
+        # ===================== NORMAL USER LOGIN =====================
+        cur.execute("""
+            SELECT id, password_hash, organization_id, is_verified, is_admin
+            FROM users
+            WHERE email=%s
+        """, (email,))
+        row = cur.fetchone()
+
+    
+        if not row:
+            return jsonify({"error": "Invalid email or password"}), 401
+
+        user_id, stored_hash, org_id, verified, is_admin = row
+
+        if not verify_password(password, stored_hash):
+            return jsonify({"error": "Invalid email or password"}), 401
+
+        if not verified:
+            return jsonify({"error": "Please verify your email"}), 401
+
+        token = create_token({
+            "user_id": user_id,
+            "organization_id": org_id,
+            "is_admin": is_admin
+        })
+
+        
+        modules = get_allowed_modules(org_id, user_id)
+
+        return jsonify({
+            "message": "Login successful",
+            "token": token,
+            "userId": user_id,
+            "organizationId": org_id,
+            "allowed_modules": modules,
+            "is_admin": is_admin
+        }), 200
+
+    finally:
+        cur.close()
+        conn.close()
+
+
+
+@auth_bp.post("/social-login")
+def social_login():
+    data = request.json or {}
+    email = data.get("email")
+
+    if not email:
+        return jsonify({"error": "Email required"}), 400
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    try:
+        # Fetch user
+        cur.execute("SELECT id, organization_id, is_verified, is_admin FROM users WHERE email=%s", (email,))
+        row = cur.fetchone()
+
+        if not row:
+            return jsonify({"userExists": False}), 200
+
+        user_id, org_id, verified, is_admin = row
+
+        # Activate user
+        cur.execute("UPDATE users SET is_active = TRUE WHERE id=%s", (user_id,))
+        conn.commit()
+
+        # Optional: generate JWT token same as /login
+        payload = {
+            "user_id": user_id,
+            "organization_id": org_id,
+            "is_admin": is_admin
+        }
+        token = create_token(payload)  # use the same function as /login
+
+
+        modules = get_allowed_modules(org_id, user_id)
+
+        return jsonify({
+            "userExists": True,
+            "isVerified": verified,
+            "token": token,
+            "userId": user_id,
+            "organizationId": org_id,
+            "allowed_modules": modules,
+            "is_admin": is_admin
+        }), 200
+
+    finally:
+        cur.close()
+        conn.close()
+
+
+
+
 @auth_bp.get("/get-profile/<int:user_id>")
 def get_profile(user_id):
     conn = get_connection()
@@ -262,93 +442,6 @@ def update_profile():
         conn.close()
 
 
-# ---------------------------------------------
-# EMAIL VERIFICATION
-# ---------------------------------------------
-@auth_bp.get("/verify/<token>")
-def verify(token):
-    conn = get_connection()
-    cur = conn.cursor()
-
-    try:
-        cur.execute("SELECT id FROM users WHERE oauth_provider_id=%s", (token,))
-        row = cur.fetchone()
-
-        if not row:
-            return redirect("http://localhost:5173/verify?status=invalid")
-
-        user_id = row[0]
-
-        cur.execute("""
-            UPDATE users
-            SET is_active = TRUE,
-                is_verified = TRUE,
-                oauth_provider_id = NULL
-            WHERE id=%s
-        """, (user_id,))
-        conn.commit()
-
-        return redirect("http://localhost:5173/verify?status=success")
-
-    finally:
-        cur.close()
-        conn.close()
-
-
-# ---------------------------------------------
-# LOGIN
-# ---------------------------------------------
-@auth_bp.post("/login")
-def login():
-    data = request.json or {}
-
-    email = data.get("email")
-    password = data.get("password")
-
-    if not email or not password:
-        return jsonify({"error": "Email and password required"}), 400
-
-    conn = get_connection()
-    cur = conn.cursor()
-
-    try:
-        cur.execute("""
-            SELECT id, password_hash, organization_id, is_verified
-            FROM users
-            WHERE email=%s
-        """, (email,))
-        row = cur.fetchone()
-
-        if not row:
-            return jsonify({"error": "User not found"}), 404
-
-        user_id, stored_hash, org_id, verified = row
-
-        if not verified:
-            return jsonify({"error": "Please verify email"}), 401
-
-        if not verify_password(password, stored_hash):
-            return jsonify({"error": "Incorrect password"}), 401
-
-        # Create token
-        token = create_token({
-            "user_id": user_id,
-            "organization_id": org_id
-        })
-        from services.module_permission_service import get_allowed_modules
-        modules = get_allowed_modules(org_id, user_id)
-        return jsonify({
-            "message": "Login successful",
-            "token": token,
-            "userId": user_id,
-            "organizationId": org_id,
-            "allowed_modules": modules
-        }), 200
-
-    finally:
-        cur.close()
-        conn.close()
-
 
 
 # ---------------------------------------------
@@ -449,21 +542,31 @@ def check_module_access():
     if not token:
         return jsonify({"error": "Token required"}), 401
 
+    # Remove "Bearer " prefix if present
     token = token.replace("Bearer ", "").strip()
     payload = decode_token(token)
 
     if not payload:
         return jsonify({"error": "Invalid or expired token"}), 401
 
-    user_id = payload["user_id"]
-    organization_id = payload["organization_id"]
+    user_id = payload.get("user_id")
+    organization_id = payload.get("organization_id")  # may be None for admin
+    is_admin = payload.get("is_admin", False)
 
+    # Admin bypass: grant access to all modules
+    if is_admin:
+        return jsonify({"access": True, "message": "Access granted (admin)"}), 200
+
+    # For normal users, require moduleId
     data = request.json or {}
     module_id = data.get("moduleId")
-
     if not module_id:
         return jsonify({"error": "moduleId required"}), 400
 
+    if not organization_id:
+        return jsonify({"error": "Organization ID missing"}), 400
+
+    # Normal user flow: check module subscription
     conn = get_connection()
     cur = conn.cursor()
 
@@ -547,7 +650,7 @@ def get_my_modules():
             "plan_id": plan_id,
             "trial_expired": trial_expired
         }), 200
-
+    
     finally:
         cur.close()
         conn.close()
@@ -773,8 +876,9 @@ def get_all_users():
 
     token = token.replace("Bearer ", "").strip()
     payload = decode_token(token)
-    if not payload:
-        return jsonify({"error": "Invalid or expired token"}), 401
+
+    if not payload or not payload.get("is_admin"):
+        return jsonify({"error": "Admin access only"}), 403
 
     conn = get_connection()
     cur = conn.cursor()
@@ -799,18 +903,18 @@ def get_all_users():
                 AND mp.organization_id = u.organization_id
             LEFT JOIN module_payment_plan mpp 
                 ON mpp.id = mp.plan_id
+            WHERE COALESCE(u.is_admin, FALSE) = FALSE
             ORDER BY u.created_at DESC
         """)
 
         rows = cur.fetchall()
-
         users = []
+
         for r in rows:
             user_id = r[0]
             organization_id = r[1]
             plan_name = r[6] or "-"
 
-            # ---------------- CHECK TRIAL EXPIRY ----------------
             trial_expired = False
             if plan_name.lower() == "trial":
                 cur.execute("""
@@ -831,7 +935,7 @@ def get_all_users():
                 "email": r[3],
                 "phone": r[4],
                 "organization_name": r[5] or "",
-                "plan": plan_name if not trial_expired else "-",  # show "-" if trial expired
+                "plan": plan_name if not trial_expired else "-",
                 "trial_expired": trial_expired,
                 "default_module_id": r[7] or [],
                 "customized_module_id": r[8] or [],

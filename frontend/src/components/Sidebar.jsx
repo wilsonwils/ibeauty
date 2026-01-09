@@ -8,7 +8,7 @@ import analyticicon from "../assets/analytic.png";
 import integicon from "../assets/integ.png";
 import seticon from "../assets/setting.png";
 import logicon from "../assets/logout.png";
-import permicon from "../assets/permission.png"
+import permicon from "../assets/permission.png";
 
 const Sidebar = () => {
   const [expanded, setExpanded] = useState(false);
@@ -31,7 +31,7 @@ const Sidebar = () => {
       icon: analyticicon,
       label: "Analytics",
       action: () => navigate("/setflow"),
-      permission: [14,15], // Analytics Basic OR Advanced
+      permission: [14, 15], // Analytics Basic OR Advanced
     },
     {
       icon: integicon,
@@ -45,25 +45,29 @@ const Sidebar = () => {
     },
     {
       icon: permicon,
-      label: "permission",
+      label: "Permission",
       action: () => navigate("/organization-permission"),
+      adminOnly: true, // ✅ Show only for admin
     },
   ];
 
-  // ✅ FILTER MENU ITEMS BASED ON PERMISSION
+  // FILTER MENU ITEMS BASED ON PERMISSION
   const filteredMenuItems = menuItems.filter((item) => {
+    // Hide admin-only items for non-admin users
+    if (item.adminOnly && !permissionService.isAdmin()) {
+      return false;
+    }
+
     if (!item.permission) return true;
 
     if (Array.isArray(item.permission)) {
       return permissionService.hasAny(item.permission);
-	  
     }
 
     return permissionService.has(item.permission);
   });
 
   return (
-    
     <aside
       className={`h-screen bg-[#25AFC1] shadow-xl flex flex-col 
       transition-all duration-300 fixed left-5 top-2 
@@ -77,7 +81,6 @@ const Sidebar = () => {
         <h1 className="text-lg text-[#1b2341] font-semibold">Logo Here</h1>
         <div className="w-8 h-px bg-[#ffffff60] mt-2"></div>
       </div>
-      
 
       {/* MENU SECTION */}
       <div className="mt-12 flex flex-col gap-6 px-3">

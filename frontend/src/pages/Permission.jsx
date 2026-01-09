@@ -32,7 +32,7 @@ const fetchUsers = async () => {
     if (res.status === 403) {
       const data = await res.json();
       if (data.error === "FREE_TRIAL_EXPIRED") {
-        alert("⚠️ Your free trial has ended. Please upgrade your plan.");
+        alert(" Your free trial has ended. Please upgrade your plan.");
         navigate("/i-beauty/add-plan");
         return;
       }

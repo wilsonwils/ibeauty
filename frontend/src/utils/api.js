@@ -10,7 +10,7 @@ export const api = (endpoint, options = {}) => {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers || {}),
     },
-    credentials: "include",  // 🔥 REQUIRED for CORS + auth
+    credentials: "include", 
     
     ...options,
   });

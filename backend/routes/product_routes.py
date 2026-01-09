@@ -62,7 +62,7 @@ def add_product():
     brand = data.get("brand")
     description = data.get("description")
     image_url = data.get("image_url")
-
+    checkout_url = data.get("checkout_url")
     amount = data.get("amount")
     stock = data.get("stock")
 
@@ -76,7 +76,8 @@ def add_product():
     product_types = data.get("product_types", [])
     skin_types = data.get("skin_types", [])
     gender = data.get("gender", [])
-    age = data.get("age")
+    age_from = data.get("age_from")
+    age_to = data.get("age_to")
     time_session = data.get("time_session", [])
 
  
@@ -114,11 +115,13 @@ def add_product():
                 product_types,
                 skin_types,
                 gender,
-                age,
+                age_from,
+                age_to,
+                checkout_url,
                 time_session,
                 is_active
             )
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,true)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,true)
             RETURNING id
         """
 
@@ -138,7 +141,9 @@ def add_product():
             json.dumps(product_types),
             json.dumps(skin_types),
             json.dumps(gender),
-            age,
+            age_from,
+            age_to,
+            checkout_url,
             json.dumps(time_session)
         )
 
@@ -214,9 +219,12 @@ def get_products():
                 product_types,
                 skin_types,
                 gender,
-                age,
+                age_from,
+                age_to,
+                checkout_url,
                 time_session,
-                is_active
+                is_active,
+                is_primary
             FROM products
             WHERE organization_id = %s
             ORDER BY name
@@ -233,7 +241,7 @@ def get_products():
             p["skin_types"] = p["skin_types"] or []
             p["gender"] = p["gender"] or []
             p["time_session"] = p["time_session"] or []
-            p["age"] = p["age"] or ""
+          
 
             products.append(p)
 
@@ -295,7 +303,9 @@ def update_product(product_id):
                 product_types = %s,
                 skin_types = %s,
                 gender = %s,
-                age = %s,
+                age_from = %s,
+                age_to = %s,
+                checkout_url = %s,
                 time_session = %s
             WHERE id = %s
         """
@@ -315,7 +325,9 @@ def update_product(product_id):
             json.dumps(data.get("product_types", [])),
             json.dumps(data.get("skin_types", [])),
             json.dumps(data.get("gender", [])),
-            json.dumps(data.get("age")),
+            data.get("age_from"),
+            data.get("age_to"),
+            data.get("checkout_url"),
             json.dumps(data.get("time_session", [])),
             product_id
         )
@@ -391,7 +403,9 @@ def bulk_upload_products():
                 json.dumps(prod.get("product_types", [])),
                 json.dumps(prod.get("skin_types", [])),
                 json.dumps(prod.get("gender", [])),
-                json.dumps(prod.get("age")),
+                prod.get("age_from"),
+                prod.get("age_to"),
+                prod.get("checkout_url"),
                 json.dumps(prod.get("time_session", [])),
                 organization_id
             )
@@ -402,7 +416,7 @@ def bulk_upload_products():
                         name=%s, sku=%s, variant_id=%s, brand=%s, description=%s,
                         image_url=%s, amount=%s, stock=%s, gst=%s, major_usp=%s,
                         concerns=%s, product_types=%s, skin_types=%s, gender=%s,
-                        age=%s, time_session=%s, organization_id=%s
+                        age_from=%s, age_to=%s, checkout_url=%s, time_session=%s, organization_id=%s
                     WHERE id=%s
                 """
                 cur.execute(query, values + (existing[0],))
@@ -412,9 +426,9 @@ def bulk_upload_products():
                     INSERT INTO products (
                         name, sku, variant_id, brand, description, image_url,
                         amount, stock, gst, major_usp, concerns,
-                        product_types, skin_types, gender, age, time_session,
+                        product_types, skin_types, gender, age_from, age_to, checkout_url, time_session,
                         organization_id
-                    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 """
                 cur.execute(query, values)
                 inserted += 1
@@ -440,6 +454,65 @@ def bulk_upload_products():
         conn.close()
 
 
+# -----------------------------
+# SET PRIMARY PRODUCT
+# -----------------------------
+@product_bp.post("/set_primary")
+def set_primary_product():
+    data = request.get_json() or {}
+    product_id = data.get("product_id")
+
+    if not product_id:
+        return jsonify({"error": "product_id is required"}), 400
+
+    # ===== TOKEN AUTH =====
+    token = request.headers.get("Authorization")
+    if not token:
+        return jsonify({"error": "Token required"}), 401
+
+    token = token.replace("Bearer ", "").strip()
+    payload = decode_token(token)
+    if not payload:
+        return jsonify({"error": "Invalid or expired token"}), 401
+
+    user_id = payload["user_id"]
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    try:
+        # 1 Get the user's organization
+        cur.execute("SELECT organization_id FROM users WHERE id=%s", (user_id,))
+        row = cur.fetchone()
+        if not row:
+            return jsonify({"error": "User not found"}), 404
+
+        org_id = row[0]
+
+        # Reset any existing primary product for this org
+        cur.execute(
+            "UPDATE products SET is_primary=false WHERE organization_id=%s",
+            (org_id,)
+        )
+
+        # Set the new primary product
+        cur.execute(
+            "UPDATE products SET is_primary=true WHERE id=%s AND organization_id=%s",
+            (product_id, org_id)
+        )
+
+        conn.commit()
+        return jsonify({"success": True, "message": "Primary product updated"}), 200
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+
+    finally:
+        cur.close()
+        conn.close()
+
+
 
 
 @product_bp.get("/product_types")
@@ -458,5 +531,18 @@ def get_skin_types():
     rows = cur.fetchall()
     return jsonify([row[0] for row in rows])
 
+@product_bp.get("/skin-conditions")
+def get_skinconditions():
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT name FROM skin_conditions")
+    rows = cur.fetchall()
+    return jsonify([row[0] for row in rows])
 
-
+@product_bp.get("/skin-concerns")
+def get_skinconcerns():
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT name FROM skin_concerns")
+    rows = cur.fetchall()
+    return jsonify([row[0] for row in rows])
