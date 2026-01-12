@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import ProductCard from "../components/ProductCard";
 import Side from "../components/Side";
-import Header from "../components/Header"; // ✅ Import Header
+import Header from "../components/Header"; 
 import { useNavigate } from "react-router-dom";
 import { getModules } from "../services/moduleService";
 import { api } from "../utils/api";
@@ -62,7 +62,7 @@ const Dashboard = () => {
         }`}
       >
         {/* HEADER */}
-        <Header /> {/* ✅ Use the Header component */}
+        <Header />
 
         {/* MAIN BODY */}
         <main className="w-full px-10 py-10">

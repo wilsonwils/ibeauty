@@ -62,7 +62,7 @@ const Segmentation = ({ data, setData, setSaveFunction }) => {
 
   const skip = options?.skip === true;
   if (!skip) {
-    // ✅ VALIDATION: Yes but no options selected
+   
     const invalidFields = Object.keys(segmentationFields).filter(
       (field) =>
         segmentation[field] === true &&

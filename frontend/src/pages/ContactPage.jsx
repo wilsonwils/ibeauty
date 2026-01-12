@@ -8,7 +8,7 @@ const ContactPage = ({ data, setData, setSaveFunction }) => {
     phone: data?.phone || false,
     whatsapp: data?.whatsapp || false,
     email: data?.email || false,
-    instagram: data?.instagram || false, // ✅ added
+    instagram: data?.instagram || false, 
   });
 
   const [errorMsg, setErrorMsg] = useState("");
@@ -21,7 +21,7 @@ const ContactPage = ({ data, setData, setSaveFunction }) => {
       phone: data.phone ?? false,
       whatsapp: data.whatsapp ?? false,
       email: data.email ?? false,
-      instagram: data.instagram ?? false, // ✅ added
+      instagram: data.instagram ?? false, 
     });
   }, []);
 
@@ -47,7 +47,7 @@ const ContactPage = ({ data, setData, setSaveFunction }) => {
 
       const skip = options.skip === true;
 
-      // ✅ validation updated
+      //  validation updated
       if (
         !skip &&
         !selected.name &&
@@ -66,14 +66,14 @@ const ContactPage = ({ data, setData, setSaveFunction }) => {
             phone: null,
             whatsapp: null,
             email: null,
-            instagram: null, // ✅ added
+            instagram: null, 
           }
         : {
             name: selected.name || false,
             phone: selected.phone || false,
             whatsapp: selected.whatsapp || false,
             email: selected.email || false,
-            instagram: selected.instagram || false, // ✅ added
+            instagram: selected.instagram || false, 
           };
 
       try {
@@ -172,7 +172,7 @@ const ContactPage = ({ data, setData, setSaveFunction }) => {
           <span className="font-semibold">Email</span>
         </label>
 
-        {/* ✅ Instagram ID */}
+        {/*  Instagram ID */}
         <label className="flex items-center gap-2">
           <input
             type="checkbox"
