@@ -1,0 +1,15 @@
+backend/venv/
+__pycache__/
+*.pyc
+
+/e
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
