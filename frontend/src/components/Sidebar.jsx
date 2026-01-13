@@ -3,14 +3,15 @@ import { useNavigate } from "react-router-dom";
 import { permissionService } from "../services/permissionService";
 
 // ICONS
-import dashicon from "../assets/dash.png";
+import producticon from "../assets/product.png";
 import analyticicon from "../assets/analytic.png";
 import integicon from "../assets/integ.png";
 import seticon from "../assets/setting.png";
 import logicon from "../assets/logout.png";
 import permicon from "../assets/permission.png";
+import { MdOutlineDashboard } from "react-icons/md";
 
-const Sidebar = () => {
+const Sidebar = ({ dashboardOnly = false }) => {
   const [expanded, setExpanded] = useState(false);
   const navigate = useNavigate();
 
@@ -22,42 +23,56 @@ const Sidebar = () => {
 
   const menuItems = [
     {
-      icon: dashicon,
-      label: "Products",
-      action: () => navigate("/productlist"),
-      permission: 3, // Product Module
+      key: "dashboard",
+      icon: <MdOutlineDashboard />,
+      label: "Dashboard",
+      action: () => navigate("/dashboard"),
     },
     {
+      key: "products",
+      icon: producticon,
+      label: "Products",
+      action: () => navigate("/productlist"),
+      permission: 3,
+    },
+    {
+      key: "analytics",
       icon: analyticicon,
       label: "Analytics",
       action: () => navigate("/setflow"),
-      permission: [14, 15], // Analytics Basic OR Advanced
+      permission: [14, 15],
     },
     {
+      key: "integration",
       icon: integicon,
       label: "Integration",
       action: () => navigate("/integration"),
     },
     {
+      key: "settings",
       icon: seticon,
       label: "Settings",
       action: () => navigate("/settings"),
     },
     {
+      key: "permission",
       icon: permicon,
       label: "Permission",
       action: () => navigate("/organization-permission"),
-      adminOnly: true, // ✅ Show only for admin
+      adminOnly: true,
     },
   ];
 
-  // FILTER MENU ITEMS BASED ON PERMISSION
   const filteredMenuItems = menuItems.filter((item) => {
-    // Hide admin-only items for non-admin users
-    if (item.adminOnly && !permissionService.isAdmin()) {
-      return false;
+    // DASHBOARD ONLY MODE
+    if (dashboardOnly) {
+      return ["dashboard", "products", "settings"].includes(item.key);
     }
 
+    // ADMIN ONLY
+    if (item.adminOnly && !permissionService.isAdmin()) return false;
+
+    // PERMISSION CHECK
     if (!item.permission) return true;
 
     if (Array.isArray(item.permission)) {
@@ -82,17 +97,22 @@ const Sidebar = () => {
         <div className="w-8 h-px bg-[#ffffff60] mt-2"></div>
       </div>
 
-      {/* MENU SECTION */}
+      {/* MENU */}
       <div className="mt-12 flex flex-col gap-6 px-3">
-        {filteredMenuItems.map((item, index) => (
+        {filteredMenuItems.map((item) => (
           <button
-            key={index}
+            key={item.key}
             onClick={item.action}
             className={`flex items-center transition-all 
             ${expanded ? "justify-start px-4 py-3" : "justify-center p-2"} 
             rounded-xl hover:bg-[#1b2341]/20`}
           >
-            <img src={item.icon} className="w-6 h-6" alt="" />
+            {typeof item.icon === "string" ? (
+              <img src={item.icon} alt={item.label} className="w-6 h-6" />
+            ) : (
+              <span className="text-white text-2xl">{item.icon}</span>
+            )}
+
             {expanded && (
               <span className="ml-4 text-white font-medium">
                 {item.label}
@@ -110,10 +130,8 @@ const Sidebar = () => {
           ${expanded ? "justify-start px-4 py-3" : "justify-center p-3"} 
           rounded-xl hover:bg-[#1b2341]/70 text-white`}
         >
-          <img src={logicon} className="w-6 h-6" alt="" />
-          {expanded && (
-            <span className="ml-4 text-white font-medium">Logout</span>
-          )}
+          <img src={logicon} alt="Logout" className="w-6 h-6" />
+          {expanded && <span className="ml-4 font-medium">Logout</span>}
         </button>
       </div>
     </aside>

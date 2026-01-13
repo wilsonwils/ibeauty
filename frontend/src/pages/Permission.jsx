@@ -84,12 +84,27 @@ const fetchUsers = async () => {
 
   // ---------------- UPDATE LOCAL USER MODULES ----------------
   const updateLocalUserModules = (userId, newModules) => {
-    setUsers((prev) =>
-      prev.map((u) =>
-        u.id === userId ? { ...u, customized_module_id: newModules } : u
-      )
-    );
-  };
+  // Update users state
+  setUsers((prev) =>
+    prev.map((u) =>
+      u.id === userId ? { ...u, customized_module_id: newModules } : u
+    )
+  );
+
+  // Update selectedUser if this panel is open
+  setSelectedUser((prev) =>
+    prev && prev.id === userId
+      ? { ...prev, customized_module_id: newModules }
+      : prev
+  );
+
+  // Merge with default plan modules and store in localStorage for permissionService
+  if (selectedUser) {
+    const defaultModules = PLAN_SIGNATURES[selectedUser.plan] || [];
+    const mergedModules = [...new Set([...defaultModules, ...newModules])];
+    localStorage.setItem("accessModules", JSON.stringify(mergedModules));
+  }
+};
 
   // ---------------- SUBMIT MODULES ----------------
   const submitModules = async () => {
@@ -154,7 +169,8 @@ const fetchUsers = async () => {
                 <th className="px-4 py-3 border text-left">Email</th>
                 <th className="px-4 py-3 border text-left">Phone</th>
                 <th className="px-4 py-3 border text-left">Organization</th>
-                <th className="px-4 py-3 border text-left">Plan</th>
+                <th className="px-4 py-3 border text-left">Current Plan</th>
+                <th className="px-4 py-3 border text-left">Update Plan</th>
               </tr>
             </thead>
 
@@ -185,26 +201,40 @@ const fetchUsers = async () => {
                     <td className="px-4 py-2 border">
                       {user.organization_name || "-"}
                     </td>
-                  <td className="px-4 py-2 border">
-                  {user.plan && user.plan.trim() && user.plan !== "-" ? (
-                    <button
-                      onClick={() => openPanel(user)}
-                      className="hover:underline cursor-pointer font-medium text-black"
-                    >
-                      {user.plan}
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => navigate("/i-beauty/add-plan", { state: { user } })}
-                      className="hover:underline cursor-pointer font-medium text-gray-500"
-                    >
-                      Add Plan
-                    </button>
-                  )}
-                </td>
+                       <td className="px-4 py-2 border">
+                      {user.plan && user.plan.trim() && user.plan !== "-" ? (
+                        <button
+                          onClick={() => openPanel(user)}
+                          className="hover:underline cursor-pointer font-medium text-black"
+                        >
+                          {user.plan}
+                        </button>
+                      ) : (
+                        <button
+                          className="font-medium text-gray-500"
+                        >
+                          Nil
+                        </button>
+                      )}
+                    </td> 
+                 
+                    <td className="px-4 py-2 border text-center">
+                      <button
+                        onClick={() =>
+                          navigate("/i-beauty/add-plan", {
+                            state: {
+                              user,
+                              currentPlan: user.plan || null,
+                            },
+                          })
+                        }
+                        className="text-gray-600 hover:underline font-medium"
+                      >
+                        {user.plan && user.plan.trim() && user.plan !== "-" ? "Update Plan" : "Add Plan"}
+                      </button>
+                    </td>
 
-
-                  </tr>
+                </tr>
                 ))}
             </tbody>
           </table>

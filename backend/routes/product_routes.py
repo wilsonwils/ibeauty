@@ -71,7 +71,7 @@ def add_product():
 
     # ===== OTHER FIELDS =====
     major_usp = data.get("major_usp")
-    concerns = data.get("concerns")
+    conditions = data.get("conditions", [])
 
     product_types = data.get("product_types", [])
     skin_types = data.get("skin_types", [])
@@ -111,7 +111,7 @@ def add_product():
                 stock,
                 gst,
                 major_usp,
-                concerns,
+                conditions,
                 product_types,
                 skin_types,
                 gender,
@@ -137,7 +137,7 @@ def add_product():
             stock,
             gst,  
             major_usp,
-            concerns,
+            json.dumps(conditions),
             json.dumps(product_types),
             json.dumps(skin_types),
             json.dumps(gender),
@@ -215,7 +215,7 @@ def get_products():
                 gst,
                 major_usp,
                 description,
-                concerns,
+                conditions,
                 product_types,
                 skin_types,
                 gender,
@@ -241,6 +241,7 @@ def get_products():
             p["skin_types"] = p["skin_types"] or []
             p["gender"] = p["gender"] or []
             p["time_session"] = p["time_session"] or []
+            p["conditions"] = p["conditions"] or []
           
 
             products.append(p)
@@ -299,7 +300,7 @@ def update_product(product_id):
                 stock = %s,
                 gst = %s,
                 major_usp = %s,
-                concerns = %s,
+                conditions = %s,
                 product_types = %s,
                 skin_types = %s,
                 gender = %s,
@@ -321,7 +322,7 @@ def update_product(product_id):
             data.get("stock"),
             data.get("gst"),
             data.get("major_usp"),
-            data.get("concerns"),
+            json.dumps(data.get("conditions", [])),
             json.dumps(data.get("product_types", [])),
             json.dumps(data.get("skin_types", [])),
             json.dumps(data.get("gender", [])),
@@ -399,7 +400,7 @@ def bulk_upload_products():
                 prod.get("stock"),
                 prod.get("gst"),
                 prod.get("major_usp"),
-                prod.get("concerns"),
+                json.dumps(prod.get("conditions", [])),
                 json.dumps(prod.get("product_types", [])),
                 json.dumps(prod.get("skin_types", [])),
                 json.dumps(prod.get("gender", [])),
@@ -415,7 +416,7 @@ def bulk_upload_products():
                     UPDATE products SET
                         name=%s, sku=%s, variant_id=%s, brand=%s, description=%s,
                         image_url=%s, amount=%s, stock=%s, gst=%s, major_usp=%s,
-                        concerns=%s, product_types=%s, skin_types=%s, gender=%s,
+                        conditions=%s, product_types=%s, skin_types=%s, gender=%s,
                         age_from=%s, age_to=%s, checkout_url=%s, time_session=%s, organization_id=%s
                     WHERE id=%s
                 """
@@ -425,7 +426,7 @@ def bulk_upload_products():
                 query = """
                     INSERT INTO products (
                         name, sku, variant_id, brand, description, image_url,
-                        amount, stock, gst, major_usp, concerns,
+                        amount, stock, gst, major_usp, conditions,
                         product_types, skin_types, gender, age_from, age_to, checkout_url, time_session,
                         organization_id
                     ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)

@@ -70,7 +70,7 @@ const AddProduct = () => {
       setSelectedProductTypes(product.product_types || []);
       setSelectedSkinTypes(product.skin_types || []);
       setSelectedGender(product.gender || []);
-      setSelectedConditions(product.skin_conditions || []);
+      setSelectedConditions(product.conditions || []);
       setAgeFrom(product.age_from || "");
       setAgeTo(product.age_to || "");
       setCheckoutUrl(product.checkout_url || "");

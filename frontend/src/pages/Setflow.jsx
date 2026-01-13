@@ -13,6 +13,8 @@ import { permissionService } from "../services/permissionService";
 import { label } from "three/tsl";
 import { useTrial } from "../context/TrialContext";
 import TrialPopup from "../components/TrialPopup";
+import { useNavigate } from "react-router-dom";
+
 
 
 const Setflow = () => {
@@ -20,7 +22,7 @@ const Setflow = () => {
     const userId = localStorage.getItem("userId");
     return `${key}_${userId || "guest"}`;
   };
-
+  const navigate = useNavigate();
   const [activeIndex, setActiveIndex] = useState(0);
   const [isCompleted, setIsCompleted] = useState(false);
 
@@ -186,155 +188,173 @@ const Setflow = () => {
   // ==================================================
   // SAVE & NEXT
   // ==================================================
-  const handleSaveNext = async () => {
-    const stepName = steps[activeIndex];
+const handleSaveNext = async () => {
+  const stepName = steps[activeIndex];
 
+  let shouldSave = false;
+  if (stepName === "Landing Page")
+    shouldSave = isDataChanged(lastSavedLanding, landingData);
+  if (stepName === "Questionaire")
+    shouldSave = isDataChanged(lastSavedQuestion, questionData);
+  if (stepName === "Capture")
+    shouldSave = isDataChanged(lastSavedCapture, captureData);
+  if (stepName === "Contact")
+    shouldSave = isDataChanged(lastSavedContact, contactData);
+  if (stepName === "Segmentation") shouldSave = true;
+  if (stepName === "Skin Goal") shouldSave = true;
+  if (stepName === "Summary") shouldSave = true;
+  if (stepName === "Routine") shouldSave = true;
+  if (stepName === "Suggest Product")
+    shouldSave = isDataChanged(lastSavedSuggest, suggestData);
 
-    let shouldSave = false;
-    if (stepName === "Landing Page")
-      shouldSave = isDataChanged(lastSavedLanding, landingData);
-    if (stepName === "Questionaire")
-      shouldSave = isDataChanged(lastSavedQuestion, questionData);
-    if (stepName === "Capture")
-      shouldSave = isDataChanged(lastSavedCapture, captureData);
-    if (stepName === "Contact")
-      shouldSave = isDataChanged(lastSavedContact, contactData);
-    if (stepName === "Segmentation") shouldSave = true;
-    if (stepName === "Skin Goal") shouldSave = true;
-    if (stepName === "Summary") shouldSave = true;
-    if (stepName === "Routine") shouldSave = true;
-    if (stepName === "Suggest Product")
-      shouldSave = isDataChanged(lastSavedSuggest, suggestData);
+  let saved = true;
+  if (shouldSave) {
+    saved = await saveStep(false);
+  }
 
-    let saved = true;
-    if (shouldSave) {
-      saved = await saveStep(false);
-    
+  if (!saved) return;
 
-      if (skippedSteps[stepName]) {
-        const updatedSkipped = { ...skippedSteps };
-        delete updatedSkipped[stepName];
-        setSkippedSteps(updatedSkipped);
-        localStorage.setItem(getUserKey("skipped_steps"), JSON.stringify(updatedSkipped));
-      }
-    }
+  // Update last saved data
+  switch (stepName) {
+    case "Landing Page":
+      setLastSavedLanding(landingData);
+      break;
+    case "Questionaire":
+      setLastSavedQuestion(questionData);
+      break;
+    case "Capture":
+      setLastSavedCapture(captureData);
+      break;
+    case "Contact":
+      setLastSavedContact(contactData);
+      break;
+    case "Segmentation":
+      setLastSavedSegmentation(segmentationData);
+      break;
+    case "Skin Goal":
+      setLastSavedSkingoal(skingoalData);
+      break;
+    case "Summary":
+      setLastSavedSummary(summaryData);
+      break;
+    case "Routine":
+      setLastSavedRoutine(routineData);
+      break;
+    case "Suggest Product":
+      setLastSavedSuggest(suggestData);
+      break;
+    default:
+      break;
+  }
 
-    if (!saved) return;
+  // Move to next step
+  const nextIndex = activeIndex + 1;
+  if (nextIndex < steps.length) {
+    setActiveIndex(nextIndex);
+  }
 
-    switch (stepName) {
-      case "Landing Page":
-        setLastSavedLanding(landingData);
-        break;
-      case "Questionaire":
-        setLastSavedQuestion(questionData);
-        break;
-      case "Capture":
-        setLastSavedCapture(captureData);
-        break;
-      case "Contact":
-        setLastSavedContact(contactData);
-        break;
-      case "Segmentation":
-        setLastSavedSegmentation(segmentationData);
-        break;
-      case "Skin Goal":
-        setLastSavedSkingoal(skingoalData);
-        break;
-      case "Summary":
-        setLastSavedSummary(summaryData);
-        break;
-      case "Routine":
-        setLastSavedRoutine(routineData);
-        break;
-      case "Suggest Product":
-        setLastSavedSuggest(suggestData);
-        break;
-      default:
-        break;
-    }
+  // Only remove skipped after moving to next step
+  if (skippedSteps[stepName]) {
+    const updatedSkipped = { ...skippedSteps };
+    delete updatedSkipped[stepName];
+    setSkippedSteps(updatedSkipped);
+    localStorage.setItem(getUserKey("skipped_steps"), JSON.stringify(updatedSkipped));
+  }
 
-    if (activeIndex < steps.length - 1) {
-      setActiveIndex(activeIndex + 1);
-    }
-    if (next > maxReachedIndex) {
-      setMaxReachedIndex(next);
-    }
-  };
+  // Update max reached index
+  if (nextIndex > maxReachedIndex) {
+    setMaxReachedIndex(nextIndex);
+  }
+};
+
 
   // ==================================================
   // SKIP & NEXT
   // ==================================================
   const goSkip = async () => {
-    const stepName = steps[activeIndex];
-    await saveStep(true);
+  const stepName = steps[activeIndex];
+  await saveStep(true);
 
-    const updatedSkipped = { ...skippedSteps, [stepName]: true };
-    setSkippedSteps(updatedSkipped);
-    localStorage.setItem(getUserKey("skipped_steps"), JSON.stringify(updatedSkipped));
+  const updatedSkipped = { ...skippedSteps, [stepName]: true };
+  setSkippedSteps(updatedSkipped);
+  localStorage.setItem(getUserKey("skipped_steps"), JSON.stringify(updatedSkipped));
 
-    switch (stepName) {
-      case "Landing Page":
-        setLastSavedLanding({});
-        setLandingData({});
-        break;
-      case "Questionaire":
-        setLastSavedQuestion({});
-        setQuestionData({});
-        break;
-      case "Capture":
-        setLastSavedCapture({});
-        setCaptureData({});
-        break;
-      case "Contact":
-        setLastSavedContact({});
-        setContactData({});
-        break;
-      case "Segmentation":
-        setLastSavedSegmentation({});
-        setSegmentationData({});
-        break;
-      case "Skin Goal":
-        setLastSavedSkingoal({});
-        setSkingoalData({});
-        break;
-      case "Summary":
-        setLastSavedSummary({});
-        setSummaryData({});
-        break;
-      case "Routine":
-        setLastSavedRoutine({});
-        setRoutineData({});
-        break;
-      case "Suggest Product":
-        setLastSavedSuggest({});
-        setSuggestData({});
-        break;
-      default:
-        break;
-    }
+  switch (stepName) {
+    case "Landing Page":
+      setLastSavedLanding({});
+      setLandingData({});
+      break;
+    case "Questionaire":
+      setLastSavedQuestion({});
+      setQuestionData({});
+      break;
+    case "Capture":
+      setLastSavedCapture({});
+      setCaptureData({});
+      break;
+    case "Contact":
+      setLastSavedContact({});
+      setContactData({});
+      break;
+    case "Segmentation":
+      setLastSavedSegmentation({});
+      setSegmentationData({});
+      break;
+    case "Skin Goal":
+      setLastSavedSkingoal({});
+      setSkingoalData({});
+      break;
+    case "Summary":
+      setLastSavedSummary({});
+      setSummaryData({});
+      break;
+    case "Routine":
+      setLastSavedRoutine({});
+      setRoutineData({});
+      break;
+    case "Suggest Product":
+      setLastSavedSuggest({});
+      setSuggestData({});
+      break;
+    default:
+      break;
+  }
 
-    if (activeIndex < steps.length - 1) {
-      setActiveIndex(activeIndex + 1);
-    }
-    if (next > maxReachedIndex) {
-      setMaxReachedIndex(next);
-   }
+  const nextIndex = activeIndex + 1;
 
-  };
+  if (nextIndex < steps.length) {
+    setActiveIndex(nextIndex);
+  }
+
+  if (nextIndex > maxReachedIndex) {
+    setMaxReachedIndex(nextIndex);
+  }
+};
 
   // ==================================================
   // FINAL SAVE (UPDATED)
   // ==================================================
-  const handleFinalSave = async () => {
-    const saved = await saveStep(false);
-    if (!saved) return;
+const handleFinalSave = async () => {
+  const saved = await saveStep(false);
+  if (!saved) return;
 
-    setIsCompleted(true);
-    setFlowUnlocked(true);
-    setActiveIndex(0); // GO TO LANDING PAGE
-        
-   
-  };
+  if (suggestData["Product Suggestion"] === true) {
+    navigate("/i-beauty/add-product", {
+      replace: true,
+      state: {
+        fromFlow: true,
+        flowIds, // pass all flow IDs if needed
+      },
+    });
+    return; 
+  }
+
+ 
+  setIsCompleted(true);
+  setFlowUnlocked(true);
+  setActiveIndex(0);
+};
+
 
   // ==================================================
   // CONTENT
@@ -533,18 +553,19 @@ return (
     </button>
   )}
 
-  <button
-    onClick={() =>
-      guardAction(
-        activeIndex === steps.length - 1
-          ? handleFinalSave
-          : handleSaveNext
-      )
-    }
-    className="px-4 py-2 bg-[#00bcd4] text-white rounded"
-  >
-    {activeIndex === steps.length - 1 ? "Save" : "Save & Next"}
-  </button>
+      <button
+        onClick={activeIndex === steps.length - 1 ? handleFinalSave : handleSaveNext}
+        className="px-4 py-2 bg-[#00bcd4] text-white rounded"
+      >
+        {steps[activeIndex] === "Suggest Product" &&
+        suggestData["Product Suggestion"] === true
+          ? "Save & Add Product"
+          : activeIndex === steps.length - 1
+          ? "Save"
+          : "Save & Next"}
+      </button>
+
+
 </div>
 
       </div>

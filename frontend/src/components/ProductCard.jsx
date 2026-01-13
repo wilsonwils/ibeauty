@@ -15,7 +15,7 @@ export default function ProductCard({ item, onClick }) {
   return (
     <div
       onClick={() => onClick(item)}   
-      className="rounded-3xl text-white p-6 flex flex-col gap-4 transition-transform duration-200 hover:-translate-y-1 cursor-pointer"
+      className="rounded-3xl text-white w-50 p-6 flex flex-col gap-4 transition-transform duration-200 hover:-translate-y-1 cursor-pointer"
       style={{
         backgroundColor: item.bg,
         boxShadow: `0 18px 30px ${item.shadow}`,

@@ -89,8 +89,7 @@ def signup():
     email = data.get("email")
     password = data.get("password")
     org_name = data.get("organization")
-    phone = data.get("phone")  # NEW: get phone
-
+    phone = data.get("phone") 
     if not all([first, last, email, password, org_name, phone]):
         return jsonify({"status": "error", "message": "Missing required fields"}), 400
 
@@ -107,12 +106,12 @@ def signup():
         if cur.fetchone():
             return jsonify({"status": "error", "message": "Email already registered"}), 400
 
-        # Create organization
         cur.execute("""
-            INSERT INTO organizations (name, website, plan, created_at)
-            VALUES (%s, %s, %s, NOW())
+            INSERT INTO organizations (name, website, plan_id, plan_name, created_at)
+            VALUES (%s, %s, %s, %s, NOW())
             RETURNING id
-        """, (org_name, None, "free"))
+        """, (org_name, None, None, None))
+
         org_id = cur.fetchone()[0]
 
         # Create user with phone
@@ -382,6 +381,7 @@ def update_profile():
     phone = data.get("phone")
     organization_name = data.get("organization")
     organization_whatsapp = data.get("whatsapp") 
+    domain_address = data.get("domainAddress")
 
     if not user_id:
         return jsonify({"status": "error", "message": "User ID required"}), 400
@@ -422,9 +422,10 @@ def update_profile():
                 UPDATE organizations
                 SET 
                     name = COALESCE(%s, name),
-                    organization_whatsapp = %s
+                    organization_whatsapp = %s,
+                    domain_Address = %s
                 WHERE id = %s
-            """, (organization_name, organization_whatsapp, organization_id))
+            """, (organization_name, organization_whatsapp, domain_address, organization_id))
 
         conn.commit()
 
@@ -748,6 +749,11 @@ def add_plan_to_user():
                 return jsonify({"error": "User not found"}), 400
             organization_id = row[0]
 
+        # Check organization exists
+        cur.execute("SELECT id FROM organizations WHERE id = %s", (organization_id,))
+        if not cur.fetchone():
+            return jsonify({"error": "Organization not found"}), 400
+
         # ---------------- GET TRIAL INFO ----------------
         cur.execute("""
             SELECT trial_start_at, trial_end_at
@@ -755,7 +761,6 @@ def add_plan_to_user():
             WHERE organization_id = %s
         """, (organization_id,))
         trial_row = cur.fetchone()
-
         now = datetime.now(timezone.utc)
 
         # BLOCK EXPIRED TRIAL (ONLY FOR TRIAL PLAN)
@@ -768,15 +773,16 @@ def add_plan_to_user():
 
         # ---------------- GET PLAN DEFAULT MODULES ----------------
         cur.execute("""
-            SELECT module_permission_default
+            SELECT module_permission_default, plan_name
             FROM module_payment_plan
             WHERE id = %s
         """, (plan_id,))
-        row = cur.fetchone()
-        if not row:
+        plan_row = cur.fetchone()
+        if not plan_row:
             return jsonify({"error": "Invalid plan_id"}), 400
 
-        module_management_id = row[0]
+        module_management_id, plan_name = plan_row
+        module_management_id_json = json.dumps(module_management_id or [])
 
         # ---------------- UPSERT MODULE PERMISSION ----------------
         cur.execute("""
@@ -798,8 +804,8 @@ def add_plan_to_user():
                 WHERE user_id = %s AND organization_id = %s
             """, (
                 plan_id,
-                json.dumps(module_management_id),
-                json.dumps(customized_modules),
+                module_management_id_json,
+                json.dumps(customized_modules or []),
                 admin_id,
                 user_id,
                 organization_id
@@ -822,11 +828,19 @@ def add_plan_to_user():
                 organization_id,
                 user_id,
                 admin_id,
-                json.dumps(module_management_id),
+                module_management_id_json,
                 plan_id,
-                json.dumps(customized_modules)
+                json.dumps(customized_modules or [])
             ))
             message = "Plan added successfully"
+
+        # ---------------- UPDATE ORGANIZATION PLAN ----------------
+        cur.execute("""
+            UPDATE organizations
+            SET plan_id = %s,
+                plan_name = %s
+            WHERE id = %s
+        """, (plan_id, plan_name, organization_id))
 
         # ---------------- CREATE FREE TRIAL (ONLY ONCE) ----------------
         if plan_id == 0:
@@ -855,10 +869,7 @@ def add_plan_to_user():
     except Exception as e:
         conn.rollback()
         print("ADD PLAN ERROR:", e)
-        return jsonify({
-            "error": "Server error",
-            "details": str(e)
-        }), 500
+        return jsonify({"error": "Server error", "details": str(e)}), 500
 
     finally:
         cur.close()

@@ -1,10 +1,11 @@
 // src/components/MultiSelectDropdown.jsx
 import React, { useState, useRef, useEffect } from "react";
 
-const MultiSelectDropdown = ({ options, selectedOptions, setSelectedOptions, label, disabled }) => {
+const MultiSelectDropdown = ({ options = [], selectedOptions = [], setSelectedOptions, label, disabled }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
+  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -15,26 +16,33 @@ const MultiSelectDropdown = ({ options, selectedOptions, setSelectedOptions, lab
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Toggle option safely
   const toggleOption = (option) => {
     if (disabled) return;
-    setSelectedOptions(
-      selectedOptions.includes(option)
-        ? selectedOptions.filter((o) => o !== option)
-        : [...selectedOptions, option]
-    );
+
+    // Ensure selectedOptions is always an array
+    const current = Array.isArray(selectedOptions) ? selectedOptions : [];
+
+    if (current.includes(option)) {
+      setSelectedOptions(current.filter((o) => o !== option));
+    } else {
+      setSelectedOptions([...current, option]);
+    }
   };
+
+  // Ensure selectedOptions is an array for rendering
+  const selected = Array.isArray(selectedOptions) ? selectedOptions : [];
 
   return (
     <div className="relative w-full" ref={dropdownRef}>
       {label && <label className="block text-sm font-medium mb-1">{label}</label>}
+
       <div
-        className={`border border-gray-300 rounded px-3 py-2 min-h-[42px] cursor-pointer flex justify-between items-center ${
-          disabled ? "bg-gray-100 cursor-not-allowed" : ""
-        }`}
+        className={`border border-gray-300 rounded px-3 py-2 min-h-[42px] cursor-pointer flex justify-between items-center ${disabled ? "bg-gray-100 cursor-not-allowed" : ""}`}
         onClick={() => !disabled && setIsOpen(!isOpen)}
       >
         <span className="text-sm truncate">
-          {selectedOptions.length ? selectedOptions.join(", ") : "Select"}
+          {selected.length ? selected.join(", ") : "Select"}
         </span>
         <svg
           className={`w-4 h-4 transition ${isOpen ? "rotate-180" : ""}`}
@@ -56,7 +64,7 @@ const MultiSelectDropdown = ({ options, selectedOptions, setSelectedOptions, lab
               <input
                 type="checkbox"
                 className="mr-2"
-                checked={selectedOptions.includes(option)}
+                checked={selected.includes(option)}
                 onChange={() => toggleOption(option)}
               />
               {option}

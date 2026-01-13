@@ -1,31 +1,50 @@
 import React, { useState } from "react";
-import logicon from "../assets/logout.png";
 import { useNavigate } from "react-router-dom";
-import dashicon from "../assets/dash.png";
+
+import logicon from "../assets/logout.png";
+import producticon from "../assets/product.png";
 import seticon from "../assets/setting.png";
-import analyticicon from "../assets/analytic.png";
+
+import { MdOutlineDashboard } from "react-icons/md";
 
 const Side = () => {
   const [expanded, setExpanded] = useState(false);
-  const navigate = useNavigate(); 
+  const navigate = useNavigate();
 
   // Logout function
   const handleLogout = () => {
-    localStorage.removeItem("userId"); 
-    navigate("/i-beauty"); 
+    localStorage.removeItem("userId");
+    navigate("/i-beauty");
   };
 
-  // Menu items with icons and labels
+  // Menu items
   const menuItems = [
-    { icon: dashicon, label: "Dashboard", action: () => navigate("/dashboard") },
-     { icon: seticon, label: "Settings", action: () => navigate("/settings") },
-     { icon: logicon, label: "Logout", action: handleLogout }, 
+    {
+      icon: <MdOutlineDashboard />,
+      label: "Dashboard",
+      action: () => navigate("/dashboard"),
+    },
+    {
+      icon: producticon,
+      label: "Products",
+      action: () => navigate("/productlist"),
+    },
+    {
+      icon: seticon,
+      label: "Settings",
+      action: () => navigate("/settings"),
+    },
+    {
+      icon: logicon,
+      label: "Logout",
+      action: handleLogout,
+    },
   ];
 
   return (
     <aside
       className={`h-screen bg-[#25AFC1] shadow-md flex flex-col items-start py-6 fixed left-0 top-0 transition-all duration-300 ${
-        expanded ? "w-45" : "w-20"
+        expanded ? "w-48" : "w-20"
       }`}
     >
       {/* LOGO */}
@@ -36,7 +55,7 @@ const Side = () => {
         <h1 className="text-2xl font-bold text-[#1b2341]">iC</h1>
         {expanded && (
           <span
-            className="text-gray-500 text-lg font-bold cursor-pointer"
+            className="text-gray-700 text-xl font-bold cursor-pointer"
             onClick={() => setExpanded(false)}
           >
             ×
@@ -49,10 +68,17 @@ const Side = () => {
         {menuItems.map((item, index) => (
           <button
             key={index}
-            onClick={item.action} 
+            onClick={item.action}
             className="flex items-center gap-4 px-4 py-2 hover:bg-[#1b2341]/70 text-white transition w-full"
           >
-            <img src={item.icon} alt="" />
+            {/* ICON */}
+            {typeof item.icon === "string" ? (
+              <img src={item.icon} alt={item.label} className="w-6 h-6" />
+            ) : (
+              <span className="text-2xl">{item.icon}</span>
+            )}
+
+            {/* LABEL */}
             {expanded && <span className="text-base">{item.label}</span>}
           </button>
         ))}

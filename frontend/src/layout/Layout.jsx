@@ -3,7 +3,7 @@ import Header from "../components/Header";
 import TrialPopup from "../components/TrialPopup";
 import { useTrial } from "../context/TrialContext";
 
-const Layout = ({ children, hideHeader = false }) => {
+const Layout = ({ children, hideHeader = false, dashboardOnly = false  }) => {
   const { trialExpired, setShowPopup } = useTrial();
 
   const handleClick = (e) => {
@@ -22,7 +22,7 @@ const Layout = ({ children, hideHeader = false }) => {
       className="flex bg-[#f7f8fa] min-h-screen"
       onClick={handleClick} // intercept in-page actions
     >
-      <Sidebar />
+       <Sidebar dashboardOnly={dashboardOnly} />
       <div className="flex flex-col w-full ml-[200px]">
         <div className="max-w-[1400px] w-full mx-auto px-6">
           {!hideHeader && <Header />}
