@@ -8,7 +8,7 @@ from passlib.hash import bcrypt
 import json
 import traceback
 from database import get_connection
-from utils.password_utils import verify_password
+from utils.password_utils import verify_password, hash_password, decrypt_password
 from utils.recaptcha import USE_RECAPTCHA, RECAPTCHA_SECRET
 from services.email_service import send_verification_email
 from services.module_permission_service import get_allowed_modules
@@ -66,65 +66,114 @@ def protected():
 def signup():
     data = request.json or {}
 
+    # ---------------- CAPTCHA ----------------
     if USE_RECAPTCHA:
         captcha_token = data.get("captcha_token")
+
         if not captcha_token:
-            return jsonify({"status": "error", "message": "Captcha token missing"}), 400
+            return jsonify({
+                "status": "error",
+                "message": "Captcha token missing"
+            }), 400
 
         try:
             captcha_data = requests.post(
                 "https://www.google.com/recaptcha/api/siteverify",
-                data={"secret": RECAPTCHA_SECRET, "response": captcha_token},
+                data={
+                    "secret": RECAPTCHA_SECRET,
+                    "response": captcha_token
+                },
                 timeout=10
             ).json()
 
             if not captcha_data.get("success"):
-                return jsonify({"status": "error", "message": "Captcha verification failed"}), 400
+                return jsonify({
+                    "status": "error",
+                    "message": "Captcha verification failed"
+                }), 400
 
         except Exception as e:
-            return jsonify({"status": "error", "message": str(e)}), 400
+            return jsonify({
+                "status": "error",
+                "message": str(e)
+            }), 400
 
+    # ---------------- INPUT ----------------
     first = data.get("firstName")
     last = data.get("lastName")
     email = data.get("email")
-    password = data.get("password")
+    password = data.get("password")   # encrypted from frontend
     org_name = data.get("organization")
-    phone = data.get("phone") 
+    phone = data.get("phone")
+
     if not all([first, last, email, password, org_name, phone]):
-        return jsonify({"status": "error", "message": "Missing required fields"}), 400
+        return jsonify({
+            "status": "error",
+            "message": "Missing required fields"
+        }), 400
+
+    # ---------------- PASSWORD ----------------
+    password_hash = hash_password(password)
 
     full_name = f"{first} {last}"
-    password_hash = bcrypt.hash(password)
     email_verify_token = secrets.token_urlsafe(32)
 
     conn = get_connection()
     cur = conn.cursor()
 
     try:
-        # Check existing email
-        cur.execute("SELECT 1 FROM users WHERE email=%s", (email,))
-        if cur.fetchone():
-            return jsonify({"status": "error", "message": "Email already registered"}), 400
+        # ---------------- EMAIL CHECK ----------------
+        cur.execute(
+            "SELECT 1 FROM users WHERE email = %s",
+            (email,)
+        )
 
+        if cur.fetchone():
+            return jsonify({
+                "status": "error",
+                "message": "Email already registered"
+            }), 400
+
+        # ---------------- CREATE ORGANIZATION ----------------
         cur.execute("""
-            INSERT INTO organizations (name, website, plan_id, plan_name, created_at)
+            INSERT INTO organizations
+            (name, website, plan_id, plan_name, created_at)
             VALUES (%s, %s, %s, %s, NOW())
             RETURNING id
         """, (org_name, None, None, None))
 
         org_id = cur.fetchone()[0]
 
-        # Create user with phone
+        # ---------------- CREATE USER ----------------
         cur.execute("""
             INSERT INTO users
-            (organization_id, email, password_hash, oauth_provider, oauth_provider_id, full_name, phone, role, is_active, created_at)
-            VALUES (%s, %s, %s, NULL, %s, %s, %s, %s, FALSE, NOW())
+            (
+                organization_id,
+                email,
+                password_hash,
+                oauth_provider,
+                oauth_provider_id,
+                full_name,
+                phone,
+                role,
+                is_active,
+                created_at
+            )
+            VALUES (%s, %s, %s, NULL, NULL, %s, %s, %s, FALSE, NOW())
             RETURNING id
-        """, (org_id, email, password_hash, email_verify_token, full_name, phone, 'user'))
-        user_id = cur.fetchone()[0]
+        """, (
+            org_id,
+            email,
+            password_hash,
+            full_name,
+            phone,
+            "user"
+        ))
 
+        user_id = cur.fetchone()[0]
         conn.commit()
 
+        # ---------------- SEND EMAIL ----------------
         try:
             send_verification_email(email, email_verify_token)
         except Exception:
@@ -132,14 +181,17 @@ def signup():
 
         return jsonify({
             "status": "success",
-            "message": "Account created. Please verify email.",
+            "message": "Account created. Please verify your email.",
             "organizationId": org_id,
             "userId": user_id
         }), 201
 
     except Exception as e:
         conn.rollback()
-        return jsonify({"status": "error", "message": str(e)}), 400
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 400
 
     finally:
         cur.close()
@@ -155,7 +207,11 @@ def verify(token):
     cur = conn.cursor()
 
     try:
-        cur.execute("SELECT id FROM users WHERE oauth_provider_id=%s", (token,))
+        cur.execute(
+            "SELECT id FROM users WHERE oauth_provider_id=%s",
+            (token,)
+        )
+
         row = cur.fetchone()
 
         if not row:
@@ -170,6 +226,7 @@ def verify(token):
                 oauth_provider_id = NULL
             WHERE id=%s
         """, (user_id,))
+
         conn.commit()
 
         return redirect("http://localhost:5173/verify?status=success")
@@ -177,7 +234,6 @@ def verify(token):
     finally:
         cur.close()
         conn.close()
-        
 
 
 # ---------------------------------------------
@@ -188,7 +244,7 @@ def login():
     data = request.json or {}
 
     email = data.get("email")
-    password = data.get("password")
+    password = data.get("password")   # encrypted from frontend
 
     if not email or not password:
         return jsonify({"error": "Email and password required"}), 400
@@ -198,17 +254,22 @@ def login():
 
     try:
         # ===================== ADMIN LOGIN =====================
-        if email == "admin@gmail.com" and password == "admin":
+        decrypted_password = decrypt_password(password)
+
+        if email == "admin@gmail.com" and decrypted_password == "admin":
 
             cur.execute("SELECT id FROM users WHERE email=%s", (email,))
             admin = cur.fetchone()
 
             if not admin:
+                admin_hash = hash_password(decrypted_password)
+
                 cur.execute("""
-                    INSERT INTO users (email, is_admin)
-                    VALUES (%s, TRUE)
+                    INSERT INTO users (email, password_hash, is_admin, is_verified, is_active)
+                    VALUES (%s, %s, TRUE, TRUE, TRUE)
                     RETURNING id
-                """, (email,))
+                """, (email, admin_hash))
+
                 admin_id = cur.fetchone()[0]
                 conn.commit()
             else:
@@ -226,15 +287,15 @@ def login():
                 "is_admin": True
             }), 200
 
-        # ===================== NORMAL USER LOGIN =====================
+        # ===================== USER LOGIN =====================
         cur.execute("""
             SELECT id, password_hash, organization_id, is_verified, is_admin
             FROM users
             WHERE email=%s
         """, (email,))
+
         row = cur.fetchone()
 
-    
         if not row:
             return jsonify({"error": "Invalid email or password"}), 401
 
@@ -252,7 +313,6 @@ def login():
             "is_admin": is_admin
         })
 
-        
         modules = get_allowed_modules(org_id, user_id)
 
         return jsonify({
@@ -710,6 +770,85 @@ def update_modules():
     finally:
         cur.close()
         conn.close()
+
+@auth_bp.get("/all-modules")
+def get_all_modules():
+    token = request.headers.get("Authorization")
+    if not token:
+        return jsonify({"error": "Token required"}), 401
+
+    token = token.replace("Bearer ", "").strip()
+    payload = decode_token(token)
+    if not payload:
+        return jsonify({"error": "Invalid or expired token"}), 401
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("""
+            SELECT id, purchase_module_name 
+            FROM module_management 
+            ORDER BY id ASC
+        """)
+
+        rows = cur.fetchall()
+
+        modules = [
+            {"id": row[0], "name": row[1]}
+            for row in rows
+        ]
+
+        return jsonify({
+            "status": "success",
+            "modules": modules
+        }), 200
+
+    finally:
+        cur.close()
+        conn.close()
+
+@auth_bp.get("/plan-signatures")
+def get_plan_signatures():
+    token = request.headers.get("Authorization")
+    if not token:
+        return jsonify({"error": "Token required"}), 401
+
+    token = token.replace("Bearer ", "").strip()
+    payload = decode_token(token)
+    if not payload:
+        return jsonify({"error": "Invalid or expired token"}), 401
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("""
+            SELECT id, plan_name, module_permission_default
+            FROM module_payment_plan
+            ORDER BY id ASC
+        """)
+
+        rows = cur.fetchall()
+
+        plans = [
+            {
+                "id": row[0],
+                "plan_name": row[1],
+                "module_ids": row[2]  # JSONB array already
+            }
+            for row in rows
+        ]
+
+        return jsonify({
+            "status": "success",
+            "plans": plans
+        }), 200
+
+    finally:
+        cur.close()
+        conn.close()
+
 
         
 @auth_bp.post("/add-plan")

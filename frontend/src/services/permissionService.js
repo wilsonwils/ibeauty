@@ -4,7 +4,7 @@ export const permissionService = {
   // ---------- GET ALLOWED MODULES ----------
   getAllowedModules() {
     if (this.isAdmin()) {
-      return [1, 2, 4, 5]; // admin has everything
+      return [1, 2, 4, 5]; 
     }
 
     let modules = localStorage.getItem("accessModules");
@@ -47,7 +47,7 @@ export const permissionService = {
     return role === "admin";
   },
 
-  // ---------- SET ALLOWED MODULES (NEW) ----------
+  // ---------- SET ALLOWED MODULES ----------
   setAllowedModules(plan, customModules = []) {
     const defaultModules = PLAN_SIGNATURES[plan] || [];
     const mergedModules = [...new Set([...defaultModules, ...customModules])];
