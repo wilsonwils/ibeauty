@@ -16,6 +16,79 @@ import TrialPopup from "../components/TrialPopup";
 
 
 const Setflow = () => {
+
+  const fetchAndStoreFlowData = async () => {
+  const token = localStorage.getItem("AUTH_TOKEN");
+  if (!token) return null;
+
+  try {
+    const res = await fetch(`${API_BASE}/flow/retrieve`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!res.ok) return null;
+
+    const data = await res.json();
+
+    // 🔑 store FULL response
+    localStorage.setItem("FLOW_RETRIEVE_DATA", JSON.stringify(data));
+
+    return data;
+  } catch (err) {
+    console.error("Flow retrieve failed", err);
+    return null;
+  }
+};
+const isEmptyObject = (obj) =>
+  !obj || (typeof obj === "object" && Object.keys(obj).length === 0);
+const retrieveFlowData = async () => {
+  let stored = localStorage.getItem("FLOW_RETRIEVE_DATA");
+  let data = stored ? JSON.parse(stored) : null;
+
+  // 🔥 FIX: {} should NOT block API call
+  if (!data || !data.flows || data.flows.length === 0) {
+    data = await fetchAndStoreFlowData();
+    if (!data) return;
+  }
+
+  // ---------------- HYDRATE EXISTING STATE ----------------
+  data.flows.forEach(({ flow, ...rest }) => {
+    const name = flow.flow_name;
+
+    setFlowIds((p) => ({ ...p, [name]: flow.id }));
+    setSkippedSteps((p) => ({ ...p, [name]: flow.skip }));
+
+    if (name === "Landing Page" && rest.landing_page)
+      setLandingData(rest.landing_page);
+
+    if (name === "Questionaire" && rest.questionnaire)
+      setQuestionData(rest.questionnaire);
+
+    if (name === "Capture" && rest.capture_page)
+      setCaptureData(rest.capture_page);
+
+    if (name === "Contact" && rest.contact_page)
+      setContactData(rest.contact_page);
+
+    if (name === "Segmentation" && rest.segmentation)
+      setSegmentationData(rest.segmentation);
+
+    if (name === "Skin Goal" && rest.skin_goal)
+      setSkingoalData(rest.skin_goal);
+
+    if (name === "Summary" && rest.summary)
+      setSummaryData(rest.summary);
+
+    if (name === "Routine" && rest.summary)
+      setRoutineData(rest.summary);
+
+    if (name === "Suggest Product" && rest.suggest_product)
+      setSuggestData(rest.suggest_product);
+  });
+};
+
     const getUserKey = (key) => {
     const userId = localStorage.getItem("userId");
     return `${key}_${userId || "guest"}`;
@@ -26,6 +99,10 @@ const Setflow = () => {
 
   const [maxReachedIndex, setMaxReachedIndex] = useState(0);
   const [flowUnlocked, setFlowUnlocked] = useState(false);
+
+  const [generating, setGenerating] = useState(false);
+const [generateResult, setGenerateResult] = useState(null);
+
 
   // -------------------- USER-SPECIFIC LOCALSTORAGE --------------------
 
@@ -68,6 +145,11 @@ const Setflow = () => {
   );
 
   // -------------------- PERSIST STEP DATA --------------------
+
+React.useEffect(() => {
+  retrieveFlowData();
+}, []);
+
   React.useEffect(() => {
     localStorage.setItem(getUserKey("landing_data"), JSON.stringify(landingData));
   }, [landingData]);
@@ -112,6 +194,51 @@ const Setflow = () => {
   const isDataChanged = (oldData, newData) =>
     JSON.stringify(oldData) !== JSON.stringify(newData);
 
+const handleGenerate = async () => {
+  const token = localStorage.getItem("AUTH_TOKEN");
+  const userId = localStorage.getItem("userId");
+
+  if (!token || !userId) {
+    alert("User not logged in");
+    return;
+  }
+
+  try {
+    setGenerating(true);
+    setGenerateResult(null);
+
+    const res = await fetch(`${API_BASE}/session/generate-link`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        module_id: 1,
+        user_id: userId,
+        landingData,
+        questionData,
+        captureData,
+        contactData,
+        segmentationData,
+        skingoalData,
+        summaryData,
+        routineData,
+        suggestData,
+      }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Generate failed");
+
+    setGenerateResult(data);
+    alert("Generated successfully ✅");
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    setGenerating(false);
+  }
+};
   // ==================================================
   // SAVE STEP
   // ==================================================
@@ -545,6 +672,15 @@ return (
   >
     {activeIndex === steps.length - 1 ? "Save" : "Save & Next"}
   </button>
+  {activeIndex === steps.length - 1 && (
+  <button
+    onClick={() => guardAction(handleGenerate)}
+    disabled={generating}
+    className="px-4 py-2 bg-green-600 text-white rounded"
+  >
+    {generating ? "Generating..." : "Generate"}
+  </button>
+)}
 </div>
 
       </div>

@@ -770,3 +770,192 @@ def save_suggestproduct():
     finally:
         cur.close()
         conn.close()
+
+@flow_bp.get("/flow/retrieve")
+def get_all_flows_external():
+    auth = request.headers.get("Authorization")
+    if not auth:
+        return jsonify({"error": "Token required"}), 401
+
+    auth_token = auth.replace("Bearer ", "").strip()
+    payload = decode_token(auth_token)
+    if not payload:
+        return jsonify({"error": "Invalid token"}), 401
+
+    user_id = payload["user_id"]
+    organization_id = payload["organization_id"]
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    try:
+
+        # ---------- FETCH FLOWS ----------
+        cur.execute("""
+            SELECT id, flow_name, description, is_active, skip
+            FROM flows
+            WHERE organization_id = %s
+            ORDER BY id
+        """, (organization_id,))
+        flows = cur.fetchall()
+
+        response_flows = []
+
+        for flow_id, flow_name, description, is_active, skip in flows:
+            flow_payload = {
+                "flow": {
+                    "id": flow_id,
+                    "flow_name": flow_name,
+                    "description": description,
+                    "is_active": is_active,
+                    "skip": skip
+                }
+            }
+
+            # =====================================================
+            # LANDING PAGE
+            # =====================================================
+            if flow_name == "Landing Page":
+                cur.execute("""
+                    SELECT thumbnail, cta_position
+                    FROM landing_page
+                    WHERE flow_id=%s
+                """, (flow_id,))
+                lp = cur.fetchone()
+                if lp:
+                    flow_payload["landing_page"] = {
+                        "thumbnail": lp[0],
+                        "cta_position": lp[1]
+                    }
+
+            # =====================================================
+            # QUESTIONNAIRE
+            # =====================================================
+            elif flow_name == "Questionaire":
+                cur.execute("""
+                    SELECT label, key, input_type, options, required, display_order
+                    FROM questions
+                    WHERE flow_id=%s AND user_id=%s
+                    ORDER BY display_order
+                """, (flow_id, user_id))
+
+                questions = [{
+                    "label": q[0],
+                    "yes_no": q[1],
+                    "type": q[2],
+                    "value": q[3] if isinstance(q[3], (list, dict)) else json.loads(q[3]) if q[3] else [],
+                    "required": q[4],
+                    "order": q[5]
+                } for q in cur.fetchall()]
+
+                flow_payload["questionnaire"] = {
+                    "questions": questions
+                }
+
+            # =====================================================
+            # CAPTURE
+            # =====================================================
+            elif flow_name == "Capture":
+                cur.execute("""
+                    SELECT text_area
+                    FROM capture
+                    WHERE flow_id=%s AND user_id=%s
+                """, (flow_id, user_id))
+                cap = cur.fetchone()
+                if cap:
+                    flow_payload["capture_page"] = {
+                        "text_area": cap[0]
+                    }
+
+            # =====================================================
+            # CONTACT
+            # =====================================================
+            elif flow_name == "Contact":
+                cur.execute("""
+                    SELECT contact_information
+                    FROM organization_contact_input
+                    WHERE flow_id=%s AND user_id=%s
+                """, (flow_id, user_id))
+                contact = cur.fetchone()
+                if contact:
+                    flow_payload["contact_page"] = {
+                        "fields": contact[0] if isinstance(contact[0], list) else json.loads(contact[0])
+                    }
+
+            # =====================================================
+            # SEGMENTATION
+            # =====================================================
+            elif flow_name == "Segmentation":
+                cur.execute("""
+                    SELECT label, key, options, required
+                    FROM segmentation_fields
+                    WHERE flow_id=%s AND user_id=%s
+                """, (flow_id, user_id))
+
+                segmentation = [{
+                    "label": s[0],
+                    "key": s[1],
+                    "options": s[2] if isinstance(s[2], list) else json.loads(s[2]) if s[2] else [],
+                    "required": s[3]
+                } for s in cur.fetchall()]
+
+                flow_payload["segmentation"] = {
+                    "fields": segmentation
+                }
+
+            # =====================================================
+            # SKIN GOAL
+            # =====================================================
+            elif flow_name == "Skin Goal":
+                cur.execute("""
+                    SELECT selected_fields
+                    FROM skin_goals
+                    WHERE flow_id=%s AND user_id=%s
+                """, (flow_id, user_id))
+                sg = cur.fetchone()
+                if sg:
+                    flow_payload["skin_goal"] = {
+                        "selected_fields": sg[0] if isinstance(sg[0], list) else json.loads(sg[0])
+                    }
+
+            # =====================================================
+            # SUMMARY / ROUTINE
+            # =====================================================
+            elif flow_name in ("Summary", "Routine"):
+                cur.execute("""
+                    SELECT field_name
+                    FROM organization_summary
+                    WHERE flow_id=%s AND user_id=%s
+                """, (flow_id, user_id))
+                sm = cur.fetchone()
+                if sm:
+                    flow_payload["summary"] = (
+                        sm[0] if isinstance(sm[0], dict) else json.loads(sm[0])
+                    )
+
+            # =====================================================
+            # SUGGEST PRODUCT
+            # =====================================================
+            elif flow_name == "Suggest Product":
+                cur.execute("""
+                    SELECT field
+                    FROM product_suggest
+                    WHERE flow_id=%s AND user_id=%s
+                """, (flow_id, user_id))
+                sp = cur.fetchone()
+                if sp:
+                    flow_payload["suggest_product"] = (
+                        sp[0] if isinstance(sp[0], dict) else json.loads(sp[0])
+                    )
+
+            response_flows.append(flow_payload)
+
+        return jsonify({
+            "organization_id": organization_id,
+            "user_id": user_id,
+            "flows": response_flows
+        }), 200
+
+    finally:
+        cur.close()
+        conn.close()
