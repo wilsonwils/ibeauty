@@ -62,9 +62,6 @@ const Setflow = () => {
   );
 
   const steps = permittedFlow.map((s) => s.label);
-  const contents = permittedFlow.map((step, i) => {
-  const StepComponent = step.component;
-
   const stepDataMap = {
   "Landing Page": [landingData, setLandingData],
   "Questionaire": [questionData, setQuestionData],
@@ -77,12 +74,13 @@ const Setflow = () => {
   "Suggest Product": [suggestData, setSuggestData],
 };
 
-
-  const [data, setData] = stepDataMap[step.label] || [{}, () => {}];
+const contents = permittedFlow.map((step) => {
+  const StepComponent = step.component;
+  const [data, setData] = stepDataMap[step.label];
 
   return (
     <StepComponent
-      key={step.label}  
+      key={step.label}
       data={data}
       setData={setData}
       setSaveFunction={setCurrentSaveFunction}
