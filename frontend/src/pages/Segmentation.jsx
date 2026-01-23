@@ -9,27 +9,77 @@ const segmentationFields = {
 };
 
 const Segmentation = ({ data, setData, setSaveFunction }) => {
-  const [segmentation, setSegmentation] = useState(data.segmentation || {});
-  const [answers, setAnswers] = useState({
-    "Skin Concerns": Array.isArray(data.answers?.["Skin Concerns"])
-      ? data.answers["Skin Concerns"]
-      : [],
-    "Skin Conditions": Array.isArray(data.answers?.["Skin Conditions"])
-      ? data.answers["Skin Conditions"]
-      : [],
-  });
-  const [required, setRequired] = useState(data.required || {});
+
+ 
+
+  const [segmentation, setSegmentation] = useState(() => data.segmentation || {});
+  const [answers, setAnswers] = useState(() => ({
+    "Skin Concerns": data.answers?.["Skin Concerns"] || [],
+    "Skin Conditions": data.answers?.["Skin Conditions"] || [],
+  }));
+  const [required, setRequired] = useState(() => data.required || {});
   const [errorMsg, setErrorMsg] = useState("");
 
   const [skinConcerns, setSkinConcerns] = useState([]);
   const [skinConditions, setSkinConditions] = useState([]);
+
+  /* ================= HELPERS ================= */
 
   const showError = (msg) => {
     setErrorMsg(msg);
     setTimeout(() => setErrorMsg(""), 3000);
   };
 
+  /* ================= RESTORE FROM BACKEND  ================= */
+
+  useEffect(() => {
+  if (Object.keys(data.segmentation || {}).length > 0) return;
+
+  const fetchSegmentation = async () => {
+    try {
+      const token = localStorage.getItem("AUTH_TOKEN");
+      if (!token) return;
+
+      const res = await fetch(`${API_BASE}/flow/segmentation`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) return;
+
+      const saved = await res.json();
+
+      const s = {};
+      const a = {};
+      const r = {};
+
+      saved.forEach((item) => {
+        const field = item.label;
+
+        s[field] = item.key === "yes"; 
+        a[field] = item.options || [];   
+        r[field] = item.required || false;
+      });
+
+      setSegmentation(s);
+      setAnswers(a);
+      setRequired(r);
+
+      setData((prev) => ({
+        ...prev,
+        segmentation: s,
+        answers: a,
+        required: r,
+      }));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  fetchSegmentation();
+}, [setData]);
+
   /* ================= FETCH OPTIONS ================= */
+
   useEffect(() => {
     const token = localStorage.getItem("AUTH_TOKEN");
     if (!token) return;
@@ -49,71 +99,89 @@ const Segmentation = ({ data, setData, setSaveFunction }) => {
       .catch(console.error);
   }, []);
 
-  /* ================= SYNC DATA ================= */
+  /* ================= SYNC TO PARENT ================= */
+
   useEffect(() => {
-    setData({ segmentation, answers, required });
-  }, [segmentation, answers, required]);
+    setData((prev) => ({
+      ...prev,
+      segmentation,
+      answers,
+      required,
+    }));
+  }, [segmentation, answers, required, setData]);
 
-  /* ================= SAVE FUNCTION ================= */
-  useEffect(() => {
-    const saveSegmentation = async (flowId, _stepData, options = {}) => {
-  const token = localStorage.getItem("AUTH_TOKEN");
-  if (!flowId || !token) return false;
+  /* ================= SAVE FUNCTION (STABLE) ================= */
 
-  const skip = options?.skip === true;
-  if (!skip) {
-   
-    const invalidFields = Object.keys(segmentationFields).filter(
-      (field) =>
-        segmentation[field] === true &&
-        (!answers[field] || answers[field].length === 0)
-    );
+  const saveSegmentation = async (flowId, _stepData, options = {}) => {
+    const token = localStorage.getItem("AUTH_TOKEN");
+    if (!flowId || !token) return false;
 
-    if (invalidFields.length > 0) {
-      showError(
-        `Please select at least one option for: ${invalidFields.join(", ")}`
-      );
-      return false;
-    }
-  }
+    const skip = options?.skip === true;
 
-  try {
-    const res = await fetch(`${API_BASE}/save_segmentation`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        flow_id: flowId,
-        skip,
-        segmentation_fields: Object.keys(segmentationFields).map((field) => ({
-          label: field,
-          key: segmentation[field] ? "yes" : "no",
-          required: required[field] || false,
-          options: segmentation[field] ? answers[field] || [] : [],
-        })),
-      }),
-    });
+    const finalSegmentation = skip ? {} : segmentation;
+    const finalAnswers = skip ? {} : answers;
+    const finalRequired = skip ? {} : required;
 
-    const result = await res.json();
-    if (!res.ok) {
-      showError(result.error || "Failed to save segmentation");
-      return false;
-    }
+    if (!skip) {
+  const enabledFields = Object.keys(segmentationFields).filter(
+    (field) => finalSegmentation[field] === true
+  );
 
-    return true;
-  } catch (err) {
-    console.error(err);
-    showError("Failed to save segmentation");
+  //  No field selected
+  if (enabledFields.length === 0) {
+    showError("Please select at least one segmentation option.");
     return false;
   }
-};
 
+  //  Selected but no answers
+  const invalidFields = enabledFields.filter(
+    (field) =>
+      !finalAnswers[field] || finalAnswers[field].length === 0
+  );
 
+  if (invalidFields.length > 0) {
+    showError(
+      `Please select at least one option for: ${invalidFields.join(", ")}`
+    );
+    return false;
+  }
+}
 
+    try {
+      const res = await fetch(`${API_BASE}/save_segmentation`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          flow_id: flowId,
+          skip,
+          segmentation_fields: Object.keys(segmentationFields).map((field) => ({
+            label: field,
+            key: skip ? "no" : finalSegmentation[field] ? "yes" : "no",
+            required: skip ? false : finalRequired[field] || false,
+            options:
+              skip || !finalSegmentation[field]
+                ? []
+                : finalAnswers[field] || [],
+          })),
+        }),
+      });
+
+      return res.ok;
+    } catch (err) {
+      console.error(err);
+      showError("Failed to save segmentation");
+      return false;
+    }
+  };
+
+  useEffect(() => {
     setSaveFunction(() => saveSegmentation);
-  }, [segmentation, answers, required]);
+  }, [setSaveFunction]);
+
+  /* ================= ACTIONS ================= */
 
   const handleNo = (field) => {
     setSegmentation((p) => ({ ...p, [field]: false }));
@@ -122,6 +190,7 @@ const Segmentation = ({ data, setData, setSaveFunction }) => {
   };
 
  
+
   return (
     <div className="flex flex-col gap-4 p-4 border rounded mt-4">
       {errorMsg && (

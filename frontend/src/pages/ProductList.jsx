@@ -224,13 +224,15 @@ const downloadTemplate = async () => {
 
   try {
     //  Fetch DB values
-    const [ptRes, stRes] = await Promise.all([
+    const [ptRes, stRes, scRes] = await Promise.all([
       api("/product_types"),
       api("/skin_types"),
+      api("/skin-conditions"),
     ]);
 
     const productTypes = await ptRes.json(); 
-    const skinTypes = await stRes.json();     
+    const skinTypes = await stRes.json();
+    const skinConditions = await scRes.json();     
 
     // ================= INSTRUCTION ROW =================
     const instructionRow = [
@@ -244,7 +246,7 @@ const downloadTemplate = async () => {
         major_usp: "",
         description: "",
         image_url: "",
-        conditions: `(${conditions.join(",")})`,
+        conditions: `(${skinConditions.join(",")})`,
         product_types: `(${productTypes.join(",")})`,
         skin_types: `(${skinTypes.join(",")})`,
         gender: "(Male,Female,Transgender)",
@@ -325,7 +327,7 @@ const uploadExcel = async (e) => {
       stock: row["stock"] || null,
       gst: row["gst"] || null,
       major_usp: row["major_usp"] || "",
-      conditions: row["conditions"] ? row["conditions"].split(",") : [],
+      conditions: row["skin-conditions"] ? row["skin-conditions"].split(",") : [],
       product_types: row["product_types"] ? row["product_types"].split(",") : [],
       skin_types: row["skin_types"] ? row["skin_types"].split(",") : [],
       gender: row["gender"] ? row["gender"].split(",") : [],

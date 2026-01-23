@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { API_BASE } from "../utils/api";
 import LandingPage from "./LandingPage";
 import Questionaire from "./Questionaire";
@@ -10,179 +10,163 @@ import SummaryPage from "./SummaryPage";
 import RoutinePage from "./RoutinePage";
 import SuggestProduct from "./SuggestProduct";
 import { permissionService } from "../services/permissionService";
-import { label } from "three/tsl";
 import { useTrial } from "../context/TrialContext";
 import TrialPopup from "../components/TrialPopup";
 import { useNavigate } from "react-router-dom";
 
-
-
 const Setflow = () => {
-    const getUserKey = (key) => {
-    const userId = localStorage.getItem("userId");
-    return `${key}_${userId || "guest"}`;
-  };
   const navigate = useNavigate();
+
+  // =========================================
+  // BASIC STATES
+  // =========================================
   const [activeIndex, setActiveIndex] = useState(0);
-  const [isCompleted, setIsCompleted] = useState(false);
-
-  const [maxReachedIndex, setMaxReachedIndex] = useState(0);
-  const [flowUnlocked, setFlowUnlocked] = useState(false);
-
-  // -------------------- USER-SPECIFIC LOCALSTORAGE --------------------
-
-  const [flowIds, setFlowIds] = useState(
-    JSON.parse(localStorage.getItem(getUserKey("flow_ids"))) || {}
-  );
-
-  const [skippedSteps, setSkippedSteps] = useState(
-    JSON.parse(localStorage.getItem(getUserKey("skipped_steps"))) || {}
-  );
-
-  // -------------------- STEP DATA --------------------
-  const [landingData, setLandingData] = useState(
-    JSON.parse(localStorage.getItem(getUserKey("landing_data"))) || {}
-  );
-  const [questionData, setQuestionData] = useState(
-    JSON.parse(localStorage.getItem(getUserKey("question_data"))) || {}
-  );
-  const [captureData, setCaptureData] = useState(
-    JSON.parse(localStorage.getItem(getUserKey("capture_data"))) || {}
-  );
-  const [contactData, setContactData] = useState(
-    JSON.parse(localStorage.getItem(getUserKey("contact_data"))) || {}
-  );
-  const [segmentationData, setSegmentationData] = useState(
-    JSON.parse(localStorage.getItem(getUserKey("segmentation_data"))) || {}
-  );
-  const [skingoalData, setSkingoalData] = useState(
-    JSON.parse(localStorage.getItem(getUserKey("skingoal_data"))) || {}
-  );
-  const [summaryData, setSummaryData] = useState(
-    JSON.parse(localStorage.getItem(getUserKey("summary_data"))) || {}
-  );
-    const [routineData, setRoutineData] = useState(
-    JSON.parse(localStorage.getItem(getUserKey("routine_data"))) || {}
-  );
-
-  const [suggestData, setSuggestData] = useState(
-    JSON.parse(localStorage.getItem(getUserKey("suggest_data"))) || {}
-  );
-
-  // -------------------- PERSIST STEP DATA --------------------
-  React.useEffect(() => {
-    localStorage.setItem(getUserKey("landing_data"), JSON.stringify(landingData));
-  }, [landingData]);
-  React.useEffect(() => {
-    localStorage.setItem(getUserKey("question_data"), JSON.stringify(questionData));
-  }, [questionData]);
-  React.useEffect(() => {
-    localStorage.setItem(getUserKey("capture_data"), JSON.stringify(captureData));
-  }, [captureData]);
-  React.useEffect(() => {
-    localStorage.setItem(getUserKey("contact_data"), JSON.stringify(contactData));
-  }, [contactData]);
-  React.useEffect(() => {
-    localStorage.setItem(getUserKey("segmentation_data"), JSON.stringify(segmentationData));
-  }, [segmentationData]);
-  React.useEffect(() => {
-    localStorage.setItem(getUserKey("skingoal_data"), JSON.stringify(skingoalData));
-  }, [skingoalData]);
-  React.useEffect(() => {
-    localStorage.setItem(getUserKey("summary_data"), JSON.stringify(summaryData));
-  }, [summaryData]);
-    React.useEffect(() => {
-    localStorage.setItem(getUserKey("routine_data"), JSON.stringify(routineData));
-  }, [routineData]);
-  React.useEffect(() => {
-    localStorage.setItem(getUserKey("suggest_data"), JSON.stringify(suggestData));
-  }, [suggestData]);
-
-  // -------------------- LAST SAVED --------------------
-  const [lastSavedLanding, setLastSavedLanding] = useState({});
-  const [lastSavedQuestion, setLastSavedQuestion] = useState({});
-  const [lastSavedCapture, setLastSavedCapture] = useState({});
-  const [lastSavedContact, setLastSavedContact] = useState({});
-  const [lastSavedSegmentation, setLastSavedSegmentation] = useState({});
-  const [lastSavedSkingoal, setLastSavedSkingoal] = useState({});
-  const [lastSavedSummary, setLastSavedSummary] = useState({});
-  const [lastSavedRoutine, setLastSavedRoutine] = useState( {} );
-  const [lastSavedSuggest, setLastSavedSuggest] = useState({});
-
+  const [flowIds, setFlowIds] = useState({});
+  const [skippedSteps, setSkippedSteps] = useState({});
   const [currentSaveFunction, setCurrentSaveFunction] = useState(null);
 
-  const isDataChanged = (oldData, newData) =>
-    JSON.stringify(oldData) !== JSON.stringify(newData);
+ 
+
+  // =========================================
+  // STEP DATA STATES (ONLY ONE SOURCE)
+  // =========================================
+  const [landingData, setLandingData] = useState({});
+  const [questionData, setQuestionData] = useState({});
+  const [captureData, setCaptureData] = useState({});
+  const [contactData, setContactData] = useState({});
+  const [segmentationData, setSegmentationData] = useState({});
+  const [skingoalData, setSkingoalData] = useState({});
+  const [summaryData, setSummaryData] = useState({});
+  const [routineData, setRoutineData] = useState({});
+  const [suggestData, setSuggestData] = useState({});
+
+  // =========================================
+  // FLOW CONFIG
+  // =========================================
+  const flowConfig = [
+  { label: "Landing Page", moduleId: 4, component: LandingPage },
+  { label: "Questionaire", moduleId: 5, component: Questionaire },
+  { label: "Capture", moduleId: 6, component: CapturePage },
+  { label: "Contact", moduleId: [7, 8], component: ContactPage },
+  { label: "Segmentation", moduleId: 9, component: Segmentation },
+  { label: "Skin Goal", moduleId: 10, component: SkingoalPage },
+  { label: "Summary", moduleId: 11, component: SummaryPage },
+  { label: "Routine", moduleId: 12, component: RoutinePage },
+  { label: "Suggest Product", moduleId: 13, component: SuggestProduct },
+];
+
+  const permittedFlow = flowConfig.filter((step) =>
+    Array.isArray(step.moduleId)
+      ? permissionService.hasAny(step.moduleId)
+      : permissionService.has(step.moduleId)
+  );
+
+  const steps = permittedFlow.map((s) => s.label);
+  const contents = permittedFlow.map((step, i) => {
+  const StepComponent = step.component;
+
+  const stepDataMap = {
+  "Landing Page": [landingData, setLandingData],
+  "Questionaire": [questionData, setQuestionData],
+  "Capture": [captureData, setCaptureData],
+  "Contact": [contactData, setContactData],
+  "Segmentation": [segmentationData, setSegmentationData],
+  "Skin Goal": [skingoalData, setSkingoalData],
+  "Summary": [summaryData, setSummaryData],
+  "Routine": [routineData, setRoutineData],
+  "Suggest Product": [suggestData, setSuggestData],
+};
+
+
+  const [data, setData] = stepDataMap[step.label] || [{}, () => {}];
+
+  return (
+    <StepComponent
+      key={step.label}  
+      data={data}
+      setData={setData}
+      setSaveFunction={setCurrentSaveFunction}
+    />
+  );
+});
+
 
   // ==================================================
   // SAVE STEP
   // ==================================================
   const saveStep = async (skipValue) => {
-    const userId = localStorage.getItem("userId");
-    const token = localStorage.getItem("AUTH_TOKEN");
+  const userId = localStorage.getItem("userId");
+  const token = localStorage.getItem("AUTH_TOKEN");
 
-    if (!userId || !token) {
-      alert("User not logged in.");
+  if (!userId || !token) {
+    alert("User not logged in.");
+    return false;
+  }
+
+  const stepName = steps[activeIndex];
+
+  try {
+    const res = await fetch(`${API_BASE}/create_flow`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        user_id: userId,
+        flow_name: stepName,
+        description: skipValue
+          ? `${stepName} skipped`
+          : `${stepName} saved successfully`,
+        skip: skipValue,
+
+       
+        current_step: activeIndex
+      }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error || "Failed to save step");
       return false;
     }
 
-    const stepName = steps[activeIndex];
+    const newFlowId = data.flow_id;
+    if (!newFlowId) return false;
 
-    try {
-      const res = await fetch(`${API_BASE}/create_flow`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          user_id: userId,
-          flow_name: stepName,
-          description: skipValue
-            ? `${stepName} skipped`
-            : `${stepName} saved successfully`,
-          skip: skipValue,
-        }),
+    const updated = { ...flowIds, [stepName]: newFlowId };
+    setFlowIds(updated);
+
+
+
+    // PASS SKIP FLAG TO CHILD
+    if (typeof currentSaveFunction === "function") {
+      const stepDataMap = {
+        "Landing Page": landingData,
+        "Questionaire": questionData,
+        "Capture": captureData,
+        "Contact": contactData,
+        "Segmentation": segmentationData,
+        "Skin Goal": skingoalData,
+        "Summary": summaryData,
+        "Routine": routineData,
+        "Suggest Product": suggestData,
+      };
+
+const stepData = stepDataMap[stepName] || {};
+
+      return await currentSaveFunction(newFlowId, stepData, {
+        skip: skipValue,
       });
-
-      const data = await res.json();
-      if (!res.ok) {
-        alert(data.error || "Failed to save step");
-        return false;
-      }
-
-      const newFlowId = data.flow_id;
-      if (!newFlowId) return false;
-
-      const updated = { ...flowIds, [stepName]: newFlowId };
-      setFlowIds(updated);
-      localStorage.setItem(getUserKey("flow_ids"), JSON.stringify(updated));
-
-      //  PASS SKIP FLAG TO CHILD
-      if (typeof currentSaveFunction === "function") {
-        let stepData = {};
-        if (stepName === "Landing Page") stepData = landingData;
-        if (stepName === "Questionaire") stepData = questionData;
-        if (stepName === "Capture") stepData = captureData;
-        if (stepName === "Contact") stepData = contactData;
-        if (stepName === "Segmentation") stepData = segmentationData;
-        if (stepName === "Skin Goal") stepData = skingoalData;
-        if (stepName === "Summary") stepData = summaryData;
-        if (stepName === "Routine") stepData = routineData;
-        if (stepName === "Suggest Product") stepData = suggestData;
-
-        return await currentSaveFunction(newFlowId, stepData, {
-          skip: skipValue,
-        });
-      }
-
-      return true;
-    } catch (err) {
-      console.error("Save error:", err);
-      alert("Failed to save step");
-      return false;
     }
-  };
+
+    return true;
+  } catch (err) {
+    console.error("Save error:", err);
+    alert("Failed to save step");
+    return false;
+  }
+};
 
   
   // ==================================================
@@ -191,80 +175,18 @@ const Setflow = () => {
 const handleSaveNext = async () => {
   const stepName = steps[activeIndex];
 
-  let shouldSave = false;
-  if (stepName === "Landing Page")
-    shouldSave = isDataChanged(lastSavedLanding, landingData);
-  if (stepName === "Questionaire")
-    shouldSave = isDataChanged(lastSavedQuestion, questionData);
-  if (stepName === "Capture")
-    shouldSave = isDataChanged(lastSavedCapture, captureData);
-  if (stepName === "Contact")
-    shouldSave = isDataChanged(lastSavedContact, contactData);
-  if (stepName === "Segmentation") shouldSave = true;
-  if (stepName === "Skin Goal") shouldSave = true;
-  if (stepName === "Summary") shouldSave = true;
-  if (stepName === "Routine") shouldSave = true;
-  if (stepName === "Suggest Product")
-    shouldSave = isDataChanged(lastSavedSuggest, suggestData);
-
-  let saved = true;
-  if (shouldSave) {
-    saved = await saveStep(false);
-  }
-
+  const saved = await saveStep(false);
   if (!saved) return;
 
-  // Update last saved data
-  switch (stepName) {
-    case "Landing Page":
-      setLastSavedLanding(landingData);
-      break;
-    case "Questionaire":
-      setLastSavedQuestion(questionData);
-      break;
-    case "Capture":
-      setLastSavedCapture(captureData);
-      break;
-    case "Contact":
-      setLastSavedContact(contactData);
-      break;
-    case "Segmentation":
-      setLastSavedSegmentation(segmentationData);
-      break;
-    case "Skin Goal":
-      setLastSavedSkingoal(skingoalData);
-      break;
-    case "Summary":
-      setLastSavedSummary(summaryData);
-      break;
-    case "Routine":
-      setLastSavedRoutine(routineData);
-      break;
-    case "Suggest Product":
-      setLastSavedSuggest(suggestData);
-      break;
-    default:
-      break;
-  }
-
-  // Move to next step
-  const nextIndex = activeIndex + 1;
-  if (nextIndex < steps.length) {
-    setActiveIndex(nextIndex);
-  }
-
-  // Only remove skipped after moving to next step
+  // remove skipped flag if previously skipped
   if (skippedSteps[stepName]) {
-    const updatedSkipped = { ...skippedSteps };
-    delete updatedSkipped[stepName];
-    setSkippedSteps(updatedSkipped);
-    localStorage.setItem(getUserKey("skipped_steps"), JSON.stringify(updatedSkipped));
+    const updated = { ...skippedSteps };
+    delete updated[stepName];
+    setSkippedSteps(updated);
   }
 
-  // Update max reached index
-  if (nextIndex > maxReachedIndex) {
-    setMaxReachedIndex(nextIndex);
-  }
+  // move next
+  setActiveIndex((prev) => prev + 1);
 };
 
 
@@ -273,63 +195,35 @@ const handleSaveNext = async () => {
   // ==================================================
   const goSkip = async () => {
   const stepName = steps[activeIndex];
-  await saveStep(true);
 
-  const updatedSkipped = { ...skippedSteps, [stepName]: true };
-  setSkippedSteps(updatedSkipped);
-  localStorage.setItem(getUserKey("skipped_steps"), JSON.stringify(updatedSkipped));
+  const saved = await saveStep(true); 
+  if (!saved) return;
 
-  switch (stepName) {
-    case "Landing Page":
-      setLastSavedLanding({});
-      setLandingData({});
-      break;
-    case "Questionaire":
-      setLastSavedQuestion({});
-      setQuestionData({});
-      break;
-    case "Capture":
-      setLastSavedCapture({});
-      setCaptureData({});
-      break;
-    case "Contact":
-      setLastSavedContact({});
-      setContactData({});
-      break;
-    case "Segmentation":
-      setLastSavedSegmentation({});
-      setSegmentationData({});
-      break;
-    case "Skin Goal":
-      setLastSavedSkingoal({});
-      setSkingoalData({});
-      break;
-    case "Summary":
-      setLastSavedSummary({});
-      setSummaryData({});
-      break;
-    case "Routine":
-      setLastSavedRoutine({});
-      setRoutineData({});
-      break;
-    case "Suggest Product":
-      setLastSavedSuggest({});
-      setSuggestData({});
-      break;
-    default:
-      break;
-  }
+  // mark skipped
+  setSkippedSteps(prev => ({
+    ...prev,
+    [stepName]: true,
+  }));
 
-  const nextIndex = activeIndex + 1;
+  // clear local state
+  const clearMap = {
+    "Landing Page": () => setLandingData({}),
+    "Questionaire": () => setQuestionData({}),
+    "Capture": () => setCaptureData({}),
+    "Contact": () => setContactData({}),
+    "Segmentation": () => setSegmentationData({}),
+    "Skin Goal": () => setSkingoalData({}),
+    "Summary": () => setSummaryData({}),
+    "Routine": () => setRoutineData({}),
+    "Suggest Product": () => setSuggestData({}),
+  };
 
-  if (nextIndex < steps.length) {
-    setActiveIndex(nextIndex);
-  }
+  clearMap[stepName]?.();
 
-  if (nextIndex > maxReachedIndex) {
-    setMaxReachedIndex(nextIndex);
-  }
+  setActiveIndex(prev => prev + 1);
 };
+
+
 
   // ==================================================
   // FINAL SAVE (UPDATED)
@@ -338,148 +232,21 @@ const handleFinalSave = async () => {
   const saved = await saveStep(false);
   if (!saved) return;
 
-  if (suggestData["Product Suggestion"] === true) {
+  // if product suggestion → go add product page
+  if (suggestData["Product Suggestion"]) {
     navigate("/i-beauty/add-product", {
       replace: true,
-      state: {
-        fromFlow: true,
-        flowIds, // pass all flow IDs if needed
-      },
+      state: { fromFlow: true, flowIds },
     });
-    return; 
+    return;
   }
 
- 
-  setIsCompleted(true);
-  setFlowUnlocked(true);
+  // otherwise just restart flow
   setActiveIndex(0);
 };
 
 
-  // ==================================================
-  // CONTENT
-  // ==================================================
-  const flowConfig = [
-  {
-    label: "Landing Page",
-    moduleId: 4,
-    render: (
-      <LandingPage
-        data={Object.keys(landingData).length ? landingData : lastSavedLanding}
-        setData={setLandingData}
-        setSaveFunction={setCurrentSaveFunction}
-      />
-    ),
-  },
-  {
-    label: "Questionaire",
-    moduleId: 5,
-    render: (
-      <Questionaire
-        data={Object.keys(questionData).length ? questionData : lastSavedQuestion}
-        setData={setQuestionData}
-        setSaveFunction={setCurrentSaveFunction}
-      />
-    ),
-  },
-  {
-    label: "Capture",
-    moduleId: 6,
-    render: (
-      <CapturePage
-        data={Object.keys(captureData).length ? captureData : lastSavedCapture}
-        setData={setCaptureData}
-        setSaveFunction={setCurrentSaveFunction}
-      />
-    ),
-  },
-  {
-    label: "Contact",
-    moduleId: [7, 8],
-    render: (
-      <ContactPage
-        data={Object.keys(contactData).length ? contactData : lastSavedContact}
-        setData={setContactData}
-        setSaveFunction={setCurrentSaveFunction}
-      />
-    ),
-  },
-  {
-    label: "Segmentation",
-    moduleId: 9,
-    render: (
-      <Segmentation
-        data={
-          Object.keys(segmentationData).length
-            ? segmentationData
-            : lastSavedSegmentation
-        }
-        setData={setSegmentationData}
-        setSaveFunction={setCurrentSaveFunction}
-      />
-    ),
-  },
-  {
-    label: "Skin Goal",
-    moduleId: 10,
-    render: (
-      <SkingoalPage
-        data={Object.keys(skingoalData).length ? skingoalData : lastSavedSkingoal}
-        setData={setSkingoalData}
-        setSaveFunction={setCurrentSaveFunction}
-      />
-    ),
-  },
-  {
-    label: "Summary",
-    moduleId: 11,
-    render: (
-      <SummaryPage
-        data={Object.keys(summaryData).length ? summaryData : lastSavedSummary}
-        setData={setSummaryData}
-        setSaveFunction={setCurrentSaveFunction}
-      />
-    ),
-  },
-  {
-    label: "Routine",
-    moduleId: 12,
-    render: (
-      <RoutinePage
-        data={Object.keys(routineData).length ? routineData : lastSavedRoutine}
-        setData={setRoutineData}
-        setSaveFunction={setCurrentSaveFunction}
-      />
-
-    ),
-  },
-  {
-    label: "Suggest Product",
-    moduleId: 13,
-    render: (
-      <SuggestProduct
-        data={Object.keys(suggestData).length ? suggestData : lastSavedSuggest}
-        setData={setSuggestData}
-        setSaveFunction={setCurrentSaveFunction}
-      />
-    ),
-  },
-];
-
-// ==================================================
-// PERMISSIONS
-// ==================================================
-const permittedFlow = flowConfig.filter((step) =>
-  Array.isArray(step.moduleId)
-    ? permissionService.hasAny(step.moduleId)
-    : permissionService.has(step.moduleId)
-);
-
-const steps = permittedFlow.map((s) => s.label);
-const contents = permittedFlow.map((s, i) =>
-  React.cloneElement(s.render, { key: i })
-);
-
+  
 const { trialExpired } = useTrial();
 const [showPopup, setShowPopup] = useState(false);
 
@@ -494,9 +261,6 @@ const guardAction = (action) => {
 
 
 
-  // ==================================================
-  // RENDER
-  // ==================================================
 return (
   <>
       {/* Trial popup */}
@@ -530,7 +294,10 @@ return (
           </span>
         )}
 
-        {contents[activeIndex]}
+         {contents[activeIndex]}
+
+
+
 
 <div className="flex justify-end gap-3 mt-6">
   {activeIndex > 0 && (

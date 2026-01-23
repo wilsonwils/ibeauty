@@ -1,17 +1,56 @@
 import React, { useState, useEffect, useRef } from "react";
 import { API_BASE } from "../utils/api";
 import Quill from "quill";
-import "quill/dist/quill.snow.css"; // Quill styles
+import "quill/dist/quill.snow.css";
 
 const CapturePage = ({ data, setData, setSaveFunction }) => {
-  const [description, setDescription] = useState(data.description || "");
+  const [description, setDescription] = useState(data?.description || "");
   const [errorMsg, setErrorMsg] = useState("");
+
   const editorRef = useRef(null);
   const quillInstance = useRef(null);
 
-  // Initialize Quill
+  /* ===============================
+     FETCH STORED DATA
+  =============================== */
   useEffect(() => {
-    if (!editorRef.current) return;
+    const fetchCapture = async () => {
+      try {
+        const token = localStorage.getItem("AUTH_TOKEN");
+        if (!token) return;
+
+        const res = await fetch(`${API_BASE}/flow/capture`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const result = await res.json();
+
+        if (res.ok && result) {
+          const value = result.text_area || "";
+
+          setDescription(value);
+
+          // sync parent
+          setData((prev) => ({
+            ...prev,
+            description: value,
+          }));
+        }
+      } catch (err) {
+        console.error("Capture fetch failed:", err);
+      }
+    };
+
+    fetchCapture();
+  }, [setData]);
+
+  /* ===============================
+     INIT QUILL 
+  =============================== */
+  useEffect(() => {
+    if (!editorRef.current || quillInstance.current) return;
 
     quillInstance.current = new Quill(editorRef.current, {
       theme: "snow",
@@ -26,18 +65,33 @@ const CapturePage = ({ data, setData, setSaveFunction }) => {
       },
     });
 
-    // Set initial content
-    quillInstance.current.root.innerHTML = description;
-
-    // Listen to text changes
     quillInstance.current.on("text-change", () => {
-      setDescription(quillInstance.current.root.innerHTML);
+      const html = quillInstance.current.root.innerHTML;
+      setDescription(html);
     });
   }, []);
 
-  // Update parent data whenever description changes
+  /* ===============================
+     SYNC STATE ➜ QUILL
+  =============================== */
   useEffect(() => {
-    setData((prev) => ({ ...prev, description }));
+    if (!quillInstance.current) return;
+
+    const editorHTML = quillInstance.current.root.innerHTML;
+
+    if (editorHTML !== description) {
+      quillInstance.current.root.innerHTML = description || "";
+    }
+  }, [description]);
+
+  /* ===============================
+     SYNC CHILD ➜ PARENT
+  =============================== */
+  useEffect(() => {
+    setData((prev) => ({
+      ...prev,
+      description,
+    }));
   }, [description, setData]);
 
   const showError = (msg) => {
@@ -45,15 +99,17 @@ const CapturePage = ({ data, setData, setSaveFunction }) => {
     setTimeout(() => setErrorMsg(""), 3000);
   };
 
-  // Save function to be used externally
+  /* ===============================
+     SAVE 
+  =============================== */
   useEffect(() => {
-    const saveCapturePage = async (flowId, _stepData, options = {}) => {
+    const saveCapturePage = async (flowId, stepData, options = {}) => {
       const token = localStorage.getItem("AUTH_TOKEN");
       if (!flowId || !token) return false;
 
       const skip = options?.skip === true;
 
-      if (!skip && (!_stepData?.description || _stepData.description.trim() === "")) {
+      if (!skip && (!stepData?.description || stepData.description.trim() === "")) {
         showError("Please enter a description");
         return false;
       }
@@ -68,7 +124,7 @@ const CapturePage = ({ data, setData, setSaveFunction }) => {
           body: JSON.stringify({
             flow_id: flowId,
             skip,
-            text_area: skip ? null : _stepData?.description || "",
+            text_area: skip ? null : stepData.description,
           }),
         });
 
@@ -83,6 +139,7 @@ const CapturePage = ({ data, setData, setSaveFunction }) => {
     setSaveFunction(() => saveCapturePage);
   }, [setSaveFunction]);
 
+
   return (
     <div className="flex flex-col gap-4 relative">
       {errorMsg && (
@@ -95,7 +152,11 @@ const CapturePage = ({ data, setData, setSaveFunction }) => {
 
       <div>
         <label className="font-semibold">Disclaimer</label>
-        <div ref={editorRef} style={{ height: 100 }} />
+        <div
+          ref={editorRef}
+          style={{ height: 120 }}
+          className="bg-white"
+        />
       </div>
     </div>
   );

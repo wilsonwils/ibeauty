@@ -13,6 +13,47 @@ const ContactPage = ({ data, setData, setSaveFunction }) => {
 
   const [errorMsg, setErrorMsg] = useState("");
 
+  useEffect(() => {
+  const fetchContact = async () => {
+    try {
+      const token = localStorage.getItem("AUTH_TOKEN");
+      if (!token) return;
+
+      const res = await fetch(`${API_BASE}/flow/contact`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const result = await res.json();
+
+      if (res.ok && Array.isArray(result)) {
+        const mapped = {
+          name: result.includes("name"),
+          phone: result.includes("phone"),
+          whatsapp: result.includes("whatsapp"),
+          email: result.includes("email"),
+          instagram: result.includes("instagram"),
+        };
+
+        setSelected(mapped);
+
+        // sync parent
+        setData((prev) => ({
+          ...prev,
+          contacts: mapped,
+        }));
+      }
+    } catch (err) {
+      console.error("Contact fetch failed:", err);
+    }
+  };
+
+  fetchContact();
+}, [setData]);
+
+
+
   // Initialize local state when component mounts
   useEffect(() => {
     if (!data) return;

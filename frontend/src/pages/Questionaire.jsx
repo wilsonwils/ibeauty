@@ -31,6 +31,50 @@ const Questionaire = ({ data, setData, setSaveFunction }) => {
 
   const [skinTypes, setSkinTypes] = useState([]);
 
+  useEffect(() => {
+  const fetchSavedQuestionnaire = async () => {
+    const token = localStorage.getItem("AUTH_TOKEN");
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/flow/questionnaire`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) return;
+
+      const saved = await res.json();
+
+      const q = {};
+      const a = {};
+      const r = {};
+
+      Object.keys(saved).forEach((field) => {
+
+       
+        if (saved[field].key === "yes") q[field] = true;
+        else if (saved[field].key === "no") q[field] = false;
+
+        a[field] =
+          saved[field].value ??
+          (questionaireFields[field]?.multi ? [] : "");
+
+        r[field] = saved[field].required || false;
+      });
+
+      setQuestionaire(q);
+      setAnswers(a);
+      setRequired(r);
+
+    } catch (err) {
+      console.error("Restore failed", err);
+    }
+  };
+
+  fetchSavedQuestionnaire();
+}, []);
+
+
   /* ================= FETCH SKIN TYPES ================= */
   useEffect(() => {
     const fetchSkinTypes = async () => {
@@ -166,7 +210,7 @@ const Questionaire = ({ data, setData, setSaveFunction }) => {
     }));
   };
 
-  /* ================= UI ================= */
+
   return (
     <div className="flex flex-col gap-4 p-4 border border-gray-300 rounded mt-4 relative">
       {errorMsg && (

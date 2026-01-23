@@ -2,85 +2,157 @@ import React, { useEffect, useState } from "react";
 import { API_BASE } from "../utils/api";
 
 const SuggestProduct = ({ data, setData, setSaveFunction }) => {
-  const questions = ["Product Suggestion"];
+
+
+  const questions = ["product_suggestion"];
 
   const emptyState = questions.reduce((acc, q) => {
     acc[q] = null;
     return acc;
   }, {});
 
+
   const [selected, setSelected] = useState(() => ({
     ...emptyState,
-    ...data,
   }));
 
   const [errorMsg, setErrorMsg] = useState("");
 
+  // =====================================
+  //  FETCH SAVED DATA 
+  // =====================================
+useEffect(() => {
+  const fetchProduct = async () => {
+    try {
+      const token = localStorage.getItem("AUTH_TOKEN");
+      if (!token) return;
+
+      const res = await fetch(`${API_BASE}/flow/suggest-product`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) return;
+
+      const result = await res.json();
+
+    
+      if (result?.product_suggestion === undefined || result?.product_suggestion === null) {
+        return;
+      }
+
+      const normalizedValue =
+        result.product_suggestion === "yes"
+          ? true
+          : result.product_suggestion === "no"
+          ? false
+          : null;
+
+      //  RESTORE LOCAL STATE
+      setSelected(prev => ({
+        ...prev,
+        product_suggestion: normalizedValue,
+      }));
+
+      //  SYNC FLOW DATA
+      setData(prev => ({
+        ...prev,
+        product_suggestion: normalizedValue,
+      }));
+
+    } catch (err) {
+      console.error("Suggest fetch failed:", err);
+    }
+  };
+
+  fetchProduct();
+}, [setData]);
+
+
+  // =====================================
+  // ERROR HANDLER
+  // =====================================
   const showError = (msg) => {
     setErrorMsg(msg);
     setTimeout(() => setErrorMsg(""), 3000);
   };
 
+  // =====================================
+  //  TOGGLE YES / NO
+  // =====================================
   const toggle = (key, value) => {
     const updated = { ...selected, [key]: value };
+
     setSelected(updated);
-    setData(updated);
+    setData(prev => ({ ...prev, [key]: value }));
+    setErrorMsg("");
   };
 
- 
+  // =====================================
+  //  SAVE FUNCTION 
+  // =====================================
   const saveSuggest = async (flowId, stepData, options = {}) => {
-  const token = localStorage.getItem("AUTH_TOKEN");
-  if (!flowId || !token) return false;
+    const token = localStorage.getItem("AUTH_TOKEN");
+    if (!flowId || !token) return false;
 
-  const skip = options.skip === true;
+    const skip = options.skip === true;
 
- 
-  if (!skip && Object.values(stepData).some((v) => v === null)) {
-    showError("Please select an option before proceeding.");
-    return false;
-  }
-
-  const payload = skip
-    ? questions.reduce((acc, q) => ({ ...acc, [q]: null }), {})
-    : stepData;
-
-  try {
-    const res = await fetch(`${API_BASE}/save_suggestproduct`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        flow_id: flowId,
-        suggest_fields: payload,
-        skip,
-      }),
-    });
-
-    const result = await res.json();
-
-    if (!res.ok) {
-      showError(result.error || "Failed to save suggestion");
+    
+    if (!skip && questions.some(q => selected[q] === null)) {
+      showError("Please select Yes or No before proceeding.");
       return false;
     }
 
-    return true;
-  } catch (err) {
-    console.error("Save error:", err);
-    showError("Failed to save suggestion");
-    return false;
-  }
-};
+  
+    const payload = skip
+      ? emptyState
+      : questions.reduce((acc, q) => {
+          acc[q] = selected[q];
+          return acc;
+        }, {});
 
+    try {
+      const res = await fetch(`${API_BASE}/save_suggestproduct`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          flow_id: flowId,
+          suggest_fields: payload,
+          skip,
+        }),
+      });
 
+      const result = await res.json();
+      if (!res.ok) {
+        showError(result?.error || "Failed to save suggestion");
+        return false;
+      }
+
+      return true;
+
+    } catch (err) {
+      console.error(err);
+      showError("Network error. Try again.");
+      return false;
+    }
+  };
+
+  // =====================================
+  // REGISTER SAVE FUNCTION
+  // =====================================
   useEffect(() => {
     setSaveFunction(() => saveSuggest);
+  }, [selected, setSaveFunction]);
 
-  }, []);
 
   return (
-    <div>
+    <div className="p-4 border rounded mt-4">
+
       <h2 className="font-bold mb-4 text-lg">Product Suggestion</h2>
 
       {errorMsg && (
@@ -90,7 +162,6 @@ const SuggestProduct = ({ data, setData, setSaveFunction }) => {
           </div>
         </div>
       )}
-
 
       {questions.map((key) => (
         <div

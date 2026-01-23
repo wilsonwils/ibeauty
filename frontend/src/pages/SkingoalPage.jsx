@@ -35,6 +35,46 @@ const SkingoalPage = ({ data, setData, setSaveFunction }) => {
     setTimeout(() => setErrorMsg(""), 3000);
   };
 
+
+useEffect(() => {
+  const fetchGoals = async () => {
+    try {
+      const token = localStorage.getItem("AUTH_TOKEN");
+      if (!token) return;
+
+      const res = await fetch(`${API_BASE}/flow/skin-goal`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) return;
+
+      const result = await res.json(); 
+
+      if (Array.isArray(result)) {
+        const mapped = conditions.reduce((acc, cond) => {
+          acc[cond] = result.includes(cond);
+          return acc;
+        }, {});
+
+        setSelected(mapped);
+
+        setData((prev) => ({
+          ...prev,
+          skinGoals: mapped,
+        }));
+      }
+    } catch (err) {
+      console.error("Skin goal fetch failed:", err);
+    }
+  };
+
+  fetchGoals();
+}, []);
+
+
+
+
+
   useEffect(() => {
     const saveSkingoal = async (flowId, _data, options = {}) => {
       const token = localStorage.getItem("AUTH_TOKEN");

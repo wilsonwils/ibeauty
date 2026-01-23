@@ -74,6 +74,333 @@ def create_flow():
         conn.close()
 
 
+def get_user_from_token():
+    auth = request.headers.get("Authorization")
+
+    if not auth:
+        return None, None, ("Authorization header missing", 401)
+
+    token = auth.replace("Bearer ", "").strip()
+    payload = decode_token(token)
+
+    if not payload:
+        return None, None, ("Invalid token", 401)
+
+    organization_id = payload.get("organization_id")
+    user_id = payload.get("user_id")
+
+    if not organization_id or not user_id:
+        return None, None, ("Invalid token payload", 401)
+
+    return organization_id, user_id, None
+
+
+def safe_json(value, default=None):
+    if not value:
+        return default
+    try:
+        return json.loads(value)
+    except:
+        return default
+
+
+# =========================================================
+#  LANDING PAGE
+# =========================================================
+
+@flow_bp.get("/flow/landing")
+def get_landing():
+    org_id, user_id, err = get_user_from_token()
+    if err:
+        return jsonify({"error": err[0]}), err[1]
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT thumbnail, cta_position
+        FROM landing_page
+        WHERE organization_id=%s
+    """, (org_id,))
+
+    row = cur.fetchone()
+
+    cur.close()
+    conn.close()
+
+    return jsonify({
+        "thumbnail": row[0] if row else None,
+        "cta_position": row[1] if row else None
+    })
+
+
+# =========================================================
+#  QUESTIONNAIRE
+# =========================================================
+
+@flow_bp.get("/flow/questionnaire")
+def get_questionnaire():
+    org_id, user_id, err = get_user_from_token()
+    if err:
+        return jsonify({"error": err[0]}), err[1]
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT label, key, input_type, options, required
+        FROM questions
+        WHERE user_id=%s
+        ORDER BY display_order
+    """, (user_id,))
+
+    rows = cur.fetchall()
+
+    data = {
+        r[0]: {
+            "key": r[1],
+            "type": r[2],
+            "value": r[3],
+            "required": r[4]
+        }
+        for r in rows
+    }
+
+    cur.close()
+    conn.close()
+
+    return jsonify(data)
+
+
+# =========================================================
+#  CAPTURE
+# =========================================================
+
+@flow_bp.get("/flow/capture")
+def get_capture():
+    org_id, user_id, err = get_user_from_token()
+    if err:
+        return jsonify({"error": err[0]}), err[1]
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT text_area
+        FROM capture
+        WHERE user_id=%s
+    """, (user_id,))
+
+    row = cur.fetchone()
+
+    cur.close()
+    conn.close()
+
+    return jsonify({
+        "text_area": row[0] if row else ""
+    })
+
+
+# =========================================================
+#  CONTACT
+# =========================================================
+
+@flow_bp.get("/flow/contact")
+def get_contact():
+    org_id, user_id, err = get_user_from_token()
+    if err:
+        return jsonify({"error": err[0]}), err[1]
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT contact_information
+        FROM organization_contact_input
+        WHERE user_id = %s
+        ORDER BY id DESC
+        LIMIT 1
+    """, (user_id,))
+
+    row = cur.fetchone()
+
+    cur.close()
+    conn.close()
+
+    #  No saved contact
+    if not row or row[0] is None:
+        return jsonify([])
+
+    #  jsonb already comes as Python list
+    if isinstance(row[0], list):
+        return jsonify(row[0])
+
+    #  fallback safety (should never happen)
+    return jsonify([])
+
+# =========================================================
+#  SEGMENTATION
+# =========================================================
+
+
+@flow_bp.get("/flow/segmentation")
+def get_segmentation():
+    org_id, user_id, err = get_user_from_token()
+    if err:
+        return jsonify({"error": err[0]}), err[1]
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    # Fetch segmentation fields
+    cur.execute("""
+        SELECT label, key, options, required
+        FROM segmentation_fields
+        WHERE user_id=%s
+    """, (user_id,))
+
+    rows = cur.fetchall()
+
+    def safe_json(value, default):
+        # If already a list, return as is
+        if isinstance(value, list):
+            return value
+        # If string, try parsing as JSON
+        if isinstance(value, str):
+            try:
+                return json.loads(value)
+            except json.JSONDecodeError:
+                return default
+        # Fallback to default
+        return default
+
+    data = [
+        {
+            "label": r[0],
+            "key": r[1],
+            "options": safe_json(r[2], []),
+            "required": r[3] if r[3] is not None else False
+        }
+        for r in rows
+    ]
+
+    cur.close()
+    conn.close()
+
+    return jsonify(data)
+
+# =========================================================
+#  SKIN GOAL
+# =========================================================
+
+@flow_bp.get("/flow/skin-goal")
+def get_skin_goal():
+    org_id, user_id, err = get_user_from_token()
+    if err:
+        return jsonify({"error": err[0]}), err[1]
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT selected_fields
+        FROM skin_goals
+        WHERE user_id=%s
+        ORDER BY id DESC
+        LIMIT 1
+    """, (user_id,))
+
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+
+    # No saved skin goal
+    if not row or row[0] is None:
+        return jsonify([])
+
+    #  jsonb already comes as Python list
+    if isinstance(row[0], list):
+        return jsonify(row[0])
+
+    # fallback safety (should never happen)
+    return jsonify([])
+
+
+# =========================================================
+#  SUMMARY
+# =========================================================
+
+@flow_bp.get("/flow/summary")
+def get_summary():
+    org_id, user_id, err = get_user_from_token()
+    if err:
+        return jsonify({"error": err[0]}), err[1]
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT field_name
+        FROM organization_summary
+        WHERE user_id = %s
+        ORDER BY id DESC
+        LIMIT 1
+    """, (user_id,))
+
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+
+    if not row or row[0] is None:
+        return jsonify({})  # default empty object
+
+    summary_data = row[0]
+    if isinstance(summary_data, dict):
+        return jsonify(summary_data)
+
+    return jsonify({})
+
+
+# =========================================================
+# SUGGEST PRODUCT
+# =========================================================
+
+
+
+@flow_bp.get("/flow/suggest-product")
+def get_suggest_product():
+    org_id, user_id, err = get_user_from_token()
+    if err:
+        return jsonify({"error": err[0]}), err[1]
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT field
+        FROM product_suggest
+        WHERE user_id = %s
+          AND field->>'product_suggestion' IS NOT NULL
+        ORDER BY id DESC
+        LIMIT 1
+    """, (user_id,))
+
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+
+    if not row or not row[0]:
+        return jsonify({})
+
+    data = row[0]
+
+    # handle jsonb returned as string
+    if isinstance(data, str):
+        data = json.loads(data)
+
+    return jsonify(data)
+
+
 
 @flow_bp.post("/save_landing_page")
 def save_landing_page():
