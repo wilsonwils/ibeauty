@@ -230,8 +230,8 @@ const handleFinalSave = async () => {
   const saved = await saveStep(false);
   if (!saved) return;
 
-  // if product suggestion → go add product page
-  if (suggestData["Product Suggestion"]) {
+  // if yes go to add product page
+  if (suggestData.product_suggestion === true) {
     navigate("/i-beauty/add-product", {
       replace: true,
       state: { fromFlow: true, flowIds },
@@ -239,9 +239,10 @@ const handleFinalSave = async () => {
     return;
   }
 
-  // otherwise just restart flow
+  // NO → restart flow
   setActiveIndex(0);
 };
+
 
 
   
@@ -323,7 +324,7 @@ return (
         className="px-4 py-2 bg-[#00bcd4] text-white rounded"
       >
         {steps[activeIndex] === "Suggest Product" &&
-        suggestData["Product Suggestion"] === true
+        suggestData.product_suggestion === true
           ? "Save & Add Product"
           : activeIndex === steps.length - 1
           ? "Save"
