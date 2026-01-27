@@ -8,7 +8,21 @@ import { FcGoogle } from "react-icons/fc";
 import { FaApple, FaPhone } from "react-icons/fa";
 import { FiUser, FiMail, FiEye, FiEyeOff } from "react-icons/fi";
 import { api } from "../utils/api";
-import { getTokenPayload, isTokenValid } from "../utils/auth";
+import { getTokenPayload, isTokenValid } from "../utils/auth"; 
+import CryptoJS from "crypto-js";
+
+const SECRET_KEY = import.meta.env.VITE_PASSWORD_SECRET;
+
+
+
+const encryptPassword = (password) => {
+  if (!SECRET_KEY) {
+    console.error("VITE_PASSWORD_SECRET is missing");
+    return password; 
+  }
+  return CryptoJS.AES.encrypt(password, SECRET_KEY).toString();
+};
+
 
 /* ----------------------------------
    Reusable Input Field
@@ -412,30 +426,40 @@ const [loading, setLoading] = useState(false);
 
 
   const handleSignup = async (e) => {
-    e.preventDefault();
+  e.preventDefault();
 
-    if (signupData.password !== signupData.confirmPassword)
-      return setErrorMessage("Passwords do not match");
-    setLoading(true); // start loader
-    setErrorMessage("");
-    try {
-      const res = await api("/signup", {
-        method: "POST",
-        body: JSON.stringify({ ...signupData }),
-      });
+  if (signupData.password !== signupData.confirmPassword)
+    return setErrorMessage("Passwords do not match");
 
-      const data = await res.json();
+  setLoading(true);
+  setErrorMessage("");
 
-      if (res.ok) setShowPopup(true);
-         
-      else setErrorMessage(data.message || "Signup failed");
-    } catch (err) {
-      console.error(err);
-      setErrorMessage("Something went wrong");
-    }finally {
-    setLoading(false); // stop loader
+  try {
+    //  ENCRYPT PASSWORD
+    const encryptedSignupData = {
+      ...signupData,
+      password: encryptPassword(signupData.password),
+      confirmPassword: encryptPassword(signupData.confirmPassword),
+    };
+  
+    const res = await api("/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(encryptedSignupData), 
+    });
+
+    const data = await res.json();
+
+    if (res.ok) setShowPopup(true);
+    else setErrorMessage(data.message || "Signup failed");
+
+  } catch (err) {
+    console.error(err);
+    setErrorMessage("Something went wrong");
+  } finally {
+    setLoading(false);
   }
-  };
+};
 
   /* ----------------------------------
      Login Submit
@@ -443,11 +467,20 @@ const [loading, setLoading] = useState(false);
  const handleLogin = async (e) => {
   e.preventDefault();
 
+ 
+  
+
   try {
+    // ENCRYPT PASSWORD
+    const encryptedLoginData = {
+      ...loginData,
+      password: encryptPassword(loginData.password),
+    };
+
     const res = await api("/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(loginData),
+      body: JSON.stringify(encryptedLoginData),
     });
 
     const data = await res.json();
@@ -458,9 +491,9 @@ const [loading, setLoading] = useState(false);
       localStorage.setItem("AUTH_TOKEN", data.token);
       localStorage.setItem("userId", data.userId);
       localStorage.setItem("orgId", data.organizationId);
-	    localStorage.setItem("accessModules", JSON.stringify(data.allowed_modules));
-	     localStorage.setItem("role", data.is_admin ? "admin" : "user");
-     
+      localStorage.setItem("accessModules", JSON.stringify(data.allowed_modules));
+      localStorage.setItem("role", data.is_admin ? "admin" : "user");
+
       if (isTokenValid(data.token)) {
         const payload = getTokenPayload(data.token);
         console.log("Token payload:", payload);
@@ -477,6 +510,7 @@ const [loading, setLoading] = useState(false);
     setErrorMessage("Something went wrong");
   }
 };
+
 
 
   /* ----------------------------------

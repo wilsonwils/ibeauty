@@ -13,6 +13,8 @@ const EditProfile = () => {
   const [whatsapp, setWhatsapp] = useState(""); 
   const [logo, setLogo] = useState("");
   const [logoPreview, setLogoPreview] = useState("");
+  const [domainAddress, setDomainAddress] = useState("");
+  const [error, setError] = useState("");
 
   const fileInputRef = useRef(null);
 
@@ -38,6 +40,7 @@ useEffect(() => {
           setLogo(u.logo);
           setLogoPreview(u.logo);
         }
+        setDomainAddress(u.domainAddress)
       } else {
         alert(data.message || "Failed to fetch user data");
       }
@@ -67,37 +70,59 @@ useEffect(() => {
     }
   };
 
+const handleDomainChange = (e) => {
+  const value = e.target.value;
+  const domain = /^(https?:\/\/|www\.)[^\s]+$/i;
+
+  setDomainAddress(value);
+
+  if (value === "" || domain.test(value)) {
+    setError("");
+  } else {
+    setError("Domain must start with http://, https://, or www.");
+  }
+};
+
+
   const handleSubmit = async (e) => {
-    e.preventDefault();
+  e.preventDefault();
 
-    try {
-      const body = {
-        user_id: localStorage.getItem("userId"),
-        firstName,
-        lastName,
-        organization,
-        phone,
-        whatsapp,
-        logo,
-      };
+  if (error) {
+    alert(error);
+    return;
+  }
 
-      const res = await api("/update-profile", {
-        method: "PUT",
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
+  try {
+    const body = {
+      user_id: localStorage.getItem("userId"),
+      firstName,
+      lastName,
+      organization,
+      phone,
+      whatsapp,
+      logo,
+      domainAddress,
+    };
 
-      if (res.ok) {
-        alert("Profile updated successfully");
-        navigate(-1);
-      } else {
-        alert(data.message || "Failed to update profile");
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Something went wrong");
+    const res = await api("/update-profile", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+
+    const data = await res.json();
+
+    if (res.ok) {
+      alert("Profile updated successfully");
+      navigate(-1);
+    } else {
+      alert(data.message || "Failed to update profile");
     }
-  };
+  } catch (err) {
+    console.error(err);
+    alert("Something went wrong");
+  }
+};
+
 
   return (
     <div className="bg-white p-6 rounded shadow-md max-w-6xl mx-auto">
@@ -175,10 +200,31 @@ useEffect(() => {
               className="w-full border p-2 rounded"
             />
           </div>
+          <div className="flex-1 min-w-[200px]">
+            <label className="block text-gray-700 mb-1">
+              Domain Address
+            </label>
+
+            <input
+              type="text"
+              value={domainAddress}
+              onChange={handleDomainChange}
+              placeholder=""
+              className={`w-full border p-2 rounded ${
+                error ? "border-red-500" : ""
+              }`}
+            />
+
+            {error && (
+              <p className="text-red-500 text-sm mt-1">{error}</p>
+            )}
+          </div>
+
+
         </div>
 
         {/* Logo */}
-        <div className="flex flex-wrap gap-4 items-center mt-4">
+        <div className="flex flex-wrap gap-4 items-end">
           <div className="flex-1 min-w-[200px]">
             <label className="block text-gray-700 mb-1">
               Organization Logo
@@ -217,12 +263,13 @@ useEffect(() => {
         </div>
 
         <div className="flex justify-end mt-4">
-          <button
-            type="submit"
-            className="bg-[#00bcd4] text-white px-4 py-2 rounded hover:bg-[#00a2b2]"
-          >
-            Update Profile
-          </button>
+       <button
+          type="submit"
+          className="px-4 py-2 rounded text-white bg-[#00bcd4] hover:bg-[#00a2b2]"
+        >
+          Update Profile
+        </button>
+
         </div>
       </form>
     </div>

@@ -44,10 +44,19 @@ function App() {
 
         {/* Pages without layout */}
         <Route path="/i-beauty" element={<LoginSign />} />
-        <Route path="/i-beauty/dashboard" element={<Dashboard />} />
+        
         <Route path="/i-beauty/verify" element={<Verify />} />
 
         {/* Pages with Layout */}
+        <Route 
+         path="/i-beauty/dashboard"
+         element={
+         <Layout dashboardOnly={true}>
+            <Dashboard />
+         </Layout>
+
+         }
+        />
         <Route
           path="/i-beauty/productlist"
           element={

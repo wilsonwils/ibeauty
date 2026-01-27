@@ -70,7 +70,7 @@ const AddProduct = () => {
       setSelectedProductTypes(product.product_types || []);
       setSelectedSkinTypes(product.skin_types || []);
       setSelectedGender(product.gender || []);
-      setSelectedConditions(product.skin_conditions || []);
+      setSelectedConditions(product.conditions || []);
       setAgeFrom(product.age_from || "");
       setAgeTo(product.age_to || "");
       setCheckoutUrl(product.checkout_url || "");
@@ -154,59 +154,64 @@ const uploadImage = async () => {
 
 
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!token) return alert("Authorization token missing!");
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  if (!token) return alert("Authorization token missing!");
 
-    const imageUrl = await uploadImage();
+  // Validate Checkout URL
+  if (checkoutUrl && !/^(https?:\/\/|www\.)/i.test(checkoutUrl)) {
+    return alert("Checkout URL must start with http://, https://, or www");
+  }
 
-    const body = {
-      sku,
-      variant_id: variantId,
-      brand,
-      name: productName,
-      amount,
-      stock,
-      major_usp: majorUsp,
-      description,
-      conditions: selectedConditions,
-      image_url: imageUrl,
-      product_types: selectedProductTypes,
-      skin_types: selectedSkinTypes,
-      gender: selectedGender,
-      age_from: ageFrom,
-      age_to: ageTo,
-      checkout_url: checkoutUrl, 
-      time_session: selectedTime,
-      user_id: localStorage.getItem("userId"),
-    };
+  const imageUrl = await uploadImage();
 
-    const endpoint = product
-      ? `${API_BASE}/update_product/${product.id}`
-      : `${API_BASE}/add_product`;
-
-    const method = product ? "PUT" : "POST";
-
-    try {
-      const res = await fetch(endpoint, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(body),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to submit product");
-
-      alert("Product saved successfully!");
-      navigate("/i-beauty/productlist");
-    } catch (err) {
-      console.error(err);
-      alert(err.message);
-    }
+  const body = {
+    sku,
+    variant_id: variantId,
+    brand,
+    name: productName,
+    amount,
+    stock,
+    major_usp: majorUsp,
+    description,
+    conditions: selectedConditions,
+    image_url: imageUrl,
+    product_types: selectedProductTypes,
+    skin_types: selectedSkinTypes,
+    gender: selectedGender,
+    age_from: ageFrom,
+    age_to: ageTo,
+    checkout_url: checkoutUrl,
+    time_session: selectedTime,
+    user_id: localStorage.getItem("userId"),
   };
+
+  const endpoint = product
+    ? `${API_BASE}/update_product/${product.id}`
+    : `${API_BASE}/add_product`;
+
+  const method = product ? "PUT" : "POST";
+
+  try {
+    const res = await fetch(endpoint, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to submit product");
+
+    alert("Product saved successfully!");
+    navigate("/i-beauty/productlist");
+  } catch (err) {
+    console.error(err);
+    alert(err.message);
+  }
+};
 
   return (
     <div className="bg-white p-6 rounded shadow max-w-6xl mx-auto">
