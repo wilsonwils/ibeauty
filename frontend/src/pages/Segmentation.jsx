@@ -9,74 +9,73 @@ const segmentationFields = {
 };
 
 const Segmentation = ({ data, setData, setSaveFunction }) => {
+  /* ================= STATE ================= */
 
- 
+  const [segmentation, setSegmentation] = useState(data.segmentation || {});
 
-  const [segmentation, setSegmentation] = useState(() => data.segmentation || {});
-  const [answers, setAnswers] = useState(() => ({
-    "Skin Concerns": data.answers?.["Skin Concerns"] || [],
-    "Skin Conditions": data.answers?.["Skin Conditions"] || [],
-  }));
-  const [required, setRequired] = useState(() => data.required || {});
+  const [answers, setAnswers] = useState({
+    ...data.answers,
+    "Skin Concerns": Array.isArray(data.answers?.["Skin Concerns"])
+      ? data.answers["Skin Concerns"]
+      : [],
+    "Skin Conditions": Array.isArray(data.answers?.["Skin Conditions"])
+      ? data.answers["Skin Conditions"]
+      : [],
+  });
+
+  const [required, setRequired] = useState(data.required || {});
   const [errorMsg, setErrorMsg] = useState("");
 
   const [skinConcerns, setSkinConcerns] = useState([]);
   const [skinConditions, setSkinConditions] = useState([]);
 
-  /* ================= HELPERS ================= */
+  /* ================= ERROR ================= */
 
   const showError = (msg) => {
     setErrorMsg(msg);
     setTimeout(() => setErrorMsg(""), 3000);
   };
 
-  /* ================= RESTORE FROM BACKEND  ================= */
+  /* ================= RESTORE FROM BACKEND ================= */
 
   useEffect(() => {
-  if (Object.keys(data.segmentation || {}).length > 0) return;
-
-  const fetchSegmentation = async () => {
-    try {
+    const fetchSavedSegmentation = async () => {
       const token = localStorage.getItem("AUTH_TOKEN");
       if (!token) return;
 
-      const res = await fetch(`${API_BASE}/flow/segmentation`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      try {
+        const res = await fetch(`${API_BASE}/flow/segmentation`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
 
-      if (!res.ok) return;
+        if (!res.ok) return;
 
-      const saved = await res.json();
+        const saved = await res.json();
 
-      const s = {};
-      const a = {};
-      const r = {};
+        const s = {};
+        const a = {};
+        const r = {};
 
-      saved.forEach((item) => {
-        const field = item.label;
+        saved.forEach((item) => {
+          const field = item.label;
 
-        s[field] = item.key === "yes"; 
-        a[field] = item.options || [];   
-        r[field] = item.required || false;
-      });
+          if (item.key === "yes") s[field] = true;
+          else if (item.key === "no") s[field] = false;
 
-      setSegmentation(s);
-      setAnswers(a);
-      setRequired(r);
+          a[field] = item.options ?? [];
+          r[field] = item.required || false;
+        });
 
-      setData((prev) => ({
-        ...prev,
-        segmentation: s,
-        answers: a,
-        required: r,
-      }));
-    } catch (err) {
-      console.error(err);
-    }
-  };
+        setSegmentation(s);
+        setAnswers(a);
+        setRequired(r);
+      } catch (err) {
+        console.error("Restore failed", err);
+      }
+    };
 
-  fetchSegmentation();
-}, [setData]);
+    fetchSavedSegmentation();
+  }, []);
 
   /* ================= FETCH OPTIONS ================= */
 
@@ -102,106 +101,115 @@ const Segmentation = ({ data, setData, setSaveFunction }) => {
   /* ================= SYNC TO PARENT ================= */
 
   useEffect(() => {
-    setData((prev) => ({
-      ...prev,
-      segmentation,
-      answers,
-      required,
-    }));
+    setData({ segmentation, answers, required });
   }, [segmentation, answers, required, setData]);
 
-  /* ================= SAVE FUNCTION (STABLE) ================= */
-
-  const saveSegmentation = async (flowId, _stepData, options = {}) => {
-    const token = localStorage.getItem("AUTH_TOKEN");
-    if (!flowId || !token) return false;
-
-    const skip = options?.skip === true;
-
-    const finalSegmentation = skip ? {} : segmentation;
-    const finalAnswers = skip ? {} : answers;
-    const finalRequired = skip ? {} : required;
-
-    if (!skip) {
-  const enabledFields = Object.keys(segmentationFields).filter(
-    (field) => finalSegmentation[field] === true
-  );
-
-  //  No field selected
-  if (enabledFields.length === 0) {
-    showError("Please select at least one segmentation option.");
-    return false;
-  }
-
-  //  Selected but no answers
-  const invalidFields = enabledFields.filter(
-    (field) =>
-      !finalAnswers[field] || finalAnswers[field].length === 0
-  );
-
-  if (invalidFields.length > 0) {
-    showError(
-      `Please select at least one option for: ${invalidFields.join(", ")}`
-    );
-    return false;
-  }
-}
-
-    try {
-      const res = await fetch(`${API_BASE}/save_segmentation`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          flow_id: flowId,
-          skip,
-          segmentation_fields: Object.keys(segmentationFields).map((field) => ({
-            label: field,
-            key: skip ? "no" : finalSegmentation[field] ? "yes" : "no",
-            required: skip ? false : finalRequired[field] || false,
-            options:
-              skip || !finalSegmentation[field]
-                ? []
-                : finalAnswers[field] || [],
-          })),
-        }),
-      });
-
-      return res.ok;
-    } catch (err) {
-      console.error(err);
-      showError("Failed to save segmentation");
-      return false;
-    }
-  };
+  /* ================= SAVE FUNCTION ================= */
 
   useEffect(() => {
+    const saveSegmentation = async (flowId, _stepData, options = {}) => {
+      const token = localStorage.getItem("AUTH_TOKEN");
+      if (!flowId || !token) return false;
+
+      const skip = options?.skip === true;
+
+      const dataToSave = skip
+        ? { segmentation: {}, answers: {}, required: {} }
+        : _stepData || { segmentation, answers, required };
+
+      /* ===== validation ===== */
+
+      if (!skip) {
+        // yes/no not selected
+        const unselectedFields = Object.keys(segmentationFields).filter(
+          (field) => dataToSave.segmentation?.[field] === undefined
+        );
+
+        if (unselectedFields.length > 0) {
+          showError("Please select Yes or No for all segmentation fields");
+          return false;
+        }
+
+        // yes selected but no options
+        const emptyInputFields = Object.keys(segmentationFields).filter(
+          (field) => {
+            const isYes = dataToSave.segmentation?.[field] === true;
+            if (!isYes) return false;
+
+            const value = dataToSave.answers?.[field];
+            return !value || value.length === 0;
+          }
+        );
+
+        if (emptyInputFields.length > 0) {
+          showError(
+            `Please select at least one option for: ${emptyInputFields.join(", ")}`
+          );
+          return false;
+        }
+      }
+
+
+      const segmentation_fields = Object.keys(segmentationFields).map((field) => ({
+        label: field,
+        key: dataToSave.segmentation?.[field] ? "yes" : "no",
+
+        options:
+          dataToSave.segmentation?.[field] === true
+            ? dataToSave.answers?.[field] || []
+            : [],
+
+        required: dataToSave.required?.[field] || false,
+      }));
+
+
+      /* ===== API CALL ===== */
+
+      try {
+        const res = await fetch(`${API_BASE}/save_segmentation`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            flow_id: flowId,
+            segmentation_fields: segmentation_fields,
+            skip,
+          }),
+        });
+
+        return res.ok;
+      } catch (err) {
+        console.error(err);
+        showError("Failed to save segmentation");
+        return false;
+      }
+    };
+
     setSaveFunction(() => saveSegmentation);
-  }, [setSaveFunction]);
+  }, [setSaveFunction, segmentation, answers, required]);
 
   /* ================= ACTIONS ================= */
 
-  const handleNo = (field) => {
+  const handleNoClick = (field) => {
     setSegmentation((p) => ({ ...p, [field]: false }));
     setRequired((p) => ({ ...p, [field]: false }));
     setAnswers((p) => ({ ...p, [field]: [] }));
   };
 
- 
 
   return (
-    <div className="flex flex-col gap-4 p-4 border rounded mt-4">
+    <div className="flex flex-col gap-4 p-4 border border-gray-300 rounded mt-4 relative">
       {errorMsg && (
-        <div className="flex justify-center">
-          <div className="bg-red-100 border border-red-400 text-red-700 px-6 py-2 rounded text-sm">
+        <div className="mt-4 flex justify-center">
+          <div className="inline-block rounded-md bg-red-100 border border-red-400 text-red-700 px-6 py-2 text-sm font-medium shadow-sm">
             {errorMsg}
           </div>
         </div>
       )}
 
-      <h2 className="font-semibold text-lg">Segmentation</h2>
+      <h2 className="font-semibold text-lg mb-3">Segmentation</h2>
 
       {Object.keys(segmentationFields).map((field) => {
         const options =
@@ -209,6 +217,7 @@ const Segmentation = ({ data, setData, setSaveFunction }) => {
 
         return (
           <div key={field} className="flex flex-col gap-2">
+            {/* YES / NO row */}
             <div className="flex items-center justify-between border p-2 rounded">
               <span className="font-medium">{field}</span>
 
@@ -227,7 +236,7 @@ const Segmentation = ({ data, setData, setSaveFunction }) => {
                 </button>
 
                 <button
-                  onClick={() => handleNo(field)}
+                  onClick={() => handleNoClick(field)}
                   className={`px-3 py-1 rounded ${
                     segmentation[field] === false
                       ? "bg-[#01bcd5] text-white"
@@ -247,11 +256,12 @@ const Segmentation = ({ data, setData, setSaveFunction }) => {
               </div>
             </div>
 
+            {/* Dropdown */}
             {segmentation[field] && (
               <MultiSelectDropdown
                 label={field}
                 options={options}
-                selectedOptions={answers[field]}
+                selectedOptions={answers[field] || []}
                 setSelectedOptions={(vals) =>
                   setAnswers((p) => ({ ...p, [field]: vals }))
                 }
