@@ -24,7 +24,8 @@ const Setflow = () => {
   const [flowIds, setFlowIds] = useState({});
   const [skippedSteps, setSkippedSteps] = useState({});
   const [currentSaveFunction, setCurrentSaveFunction] = useState(null);
-
+  const [generating, setGenerating] = useState(false);
+  const [generateResult, setGenerateResult] = useState(null);
  
 
   // =========================================
@@ -89,6 +90,51 @@ const contents = permittedFlow.map((step) => {
 });
 
 
+const handleGenerate = async () => {
+  const token = localStorage.getItem("AUTH_TOKEN");
+  const userId = localStorage.getItem("userId");
+
+  if (!token || !userId) {
+    alert("User not logged in");
+    return;
+  }
+
+  try {
+    setGenerating(true);
+    setGenerateResult(null);
+
+    const res = await fetch(`${API_BASE}/session/generate-link`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        module_id: 1,
+        user_id: userId,
+        landingData,
+        questionData,
+        captureData,
+        contactData,
+        segmentationData,
+        skingoalData,
+        summaryData,
+        routineData,
+        suggestData,
+      }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Generate failed");
+
+    setGenerateResult(data);
+    alert("Generated successfully ✅");
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    setGenerating(false);
+  }
+};
   // ==================================================
   // SAVE STEP
   // ==================================================
@@ -331,6 +377,15 @@ return (
       </button>
 
 
+  {activeIndex === steps.length - 1 && (
+  <button
+    onClick={() => guardAction(handleGenerate)}
+    disabled={generating}
+    className="px-4 py-2 bg-green-600 text-white rounded"
+  >
+    {generating ? "Generating..." : "Generate"}
+  </button>
+)}
 </div>
 
       </div>

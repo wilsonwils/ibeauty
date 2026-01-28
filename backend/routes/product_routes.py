@@ -1,3 +1,4 @@
+from datetime import datetime,timezone
 from flask import Blueprint, request, jsonify, send_from_directory
 from database import get_connection
 import secrets, os
@@ -86,6 +87,7 @@ def add_product():
     if not all([name, sku, amount, stock]):
         return jsonify({"error": "Missing required fields"}), 400
 
+
     conn = get_connection()
     cur = conn.cursor()
 
@@ -97,7 +99,45 @@ def add_product():
             return jsonify({"error": "User not found"}), 404
 
         org_id = row[0]
+        cur.execute("SELECT module_id,plan,status,trial_end_at,trial_start_at, payment_status FROM organization_modules WHERE organization_id = %s AND user_id = %s", (org_id, user_id))
+        org_module = cur.fetchone()
+        if not org_module:
+            return jsonify({"error": "Organization plan not found"}), 404
+        module_id,plan,status,trial_end_at,trial_start_at, payment_status = org_module
 
+        trial_expired = False
+        if trial_end_at:
+            trial_expired = datetime.now(timezone.utc) >= trial_end_at
+
+        if trial_expired or payment_status != "Success":
+            return jsonify({
+                "error": "Organization plan is not active. Please upgrade your plan."
+            }), 403
+
+        plan = (plan or "").strip().lower()
+        limit_key = f"product limit - {plan}"
+
+        limit_row = cur.fetchone()
+
+        cur.execute("""
+            SELECT "limit" FROM module_management WHERE LOWER(purchase_module_name) = %s
+        """, (limit_key,))
+
+        limit_row = cur.fetchone()
+
+        product_limit = int(limit_row[0])
+
+        cur.execute(
+    "SELECT COUNT(*) FROM products WHERE organization_id = %s AND is_active = true ",
+    (org_id,)
+)
+        current_product_count = cur.fetchone()[0]
+
+        if product_limit != -1 and current_product_count >= product_limit:
+            return jsonify({
+                "error": f"Product limit exceeded for your {plan} plan"
+            }), 403
+            
         query = """
             INSERT INTO products (
                 organization_id,
